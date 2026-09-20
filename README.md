@@ -62,6 +62,7 @@ The final epoch-40 checkpoint was loaded and evaluated on 110 chronological test
 - `ray_train_outputs/test_predictions.csv`: held-out predictions
 - `ray_train_outputs/mlflow_run.json`: finished MLflow run ID and tracking URI
 - `mlflow.db` and `mlruns/`: local MLflow experiment database and artifacts
+- `ray_train_outputs/evidently_report.html`: Evidently report from actual features and predictions
 - `ray_train_outputs/ray_train_model_worker_0.pth`: final model state
 - `ray_train_outputs/checkpoint_epoch_*`: Ray checkpoint directories
 
@@ -76,13 +77,17 @@ Each epoch writes model state, optimizer state, epoch, and configuration to a di
 | Structured data storage | SQLite | Implemented and used for SQL extraction |
 | Data versioning | DVC | Local database metadata tracked; no remote configured |
 | Experiment Tracking | MLflow | Implemented and executed locally with parameters, losses, test metrics, and checkpoint artifacts |
-| CI/CD, serving, monitoring, governance | Not selected | Not implemented because unnecessary for this focused CCA workflow |
+| CI/CD | GitHub Actions | CPU-safe syntax, tests, and lightweight verification workflow |
+| Model Serving | FastAPI | Local `/predict` endpoint loads the actual checkpoint and preprocessor |
+| Monitoring | Evidently | Local report generated from actual features and predictions |
+| Governance | Model Card | Actual model, dataset, metrics, and limitations in `docs/model_card.md` |
 
 ## Limitations
 - One GPU only; no multi-GPU, multi-node, speedup, or cloud claims.
 - Gloo was used on Windows.
 - The dataset is daily and modest in size, not an enterprise-scale benchmark.
 - No external experiment tracker, serving API, monitoring stack, CI/CD service, or DVC remote is implemented.
+- These are local/CPU-safe demonstrations; no production deployment is claimed.
 
 ## Documentation
 - [docs/architecture.md](docs/architecture.md)

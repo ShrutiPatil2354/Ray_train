@@ -31,10 +31,13 @@ MLOps connects data, model development, testing, version control, reproducibilit
 | Structured data workflow | SQLite | Required database-backed training path | Implemented and executed | `bike_sharing.db`, SQL evidence |
 | Data versioning | DVC | Existing selected project capability | Local metadata executed; no remote | `bike_sharing.db.dvc`, DVC status |
 | Experiment Tracking | MLflow | Required lifecycle category | Executed locally with a finished run | MLflow run ID, parameters, metrics, artifacts |
-| CI/CD, serving, monitoring, governance | Not selected | Not required for this focused CCA | Not implemented | Limitations |
+| CI/CD | GitHub Actions | Required lifecycle category | Workflow implemented; hosted run pending push | `.github/workflows/ci.yml` |
+| Model Serving | FastAPI | Required lifecycle category | Local `/predict` request executed | HTTP 200 and real prediction |
+| Monitoring | Evidently | Required lifecycle category | Report generated from actual data/predictions | `evidently_report.html` |
+| Governance | Model Card | Required lifecycle category | Actual model card created | `docs/model_card.md` |
 
 ## 6. Working/Features of Each Tool
-SQLite stores the validated Bike Sharing table and supplies SQL query results. PyTorch defines the regression network. Ray Train allocates one worker/GPU, reports train/validation losses, and wraps per-epoch state in Ray checkpoints. MLflow records the same run's parameters, epoch metrics, evaluation metrics, and artifacts. Git versions the project and DVC tracks local database metadata.
+SQLite stores the validated Bike Sharing table and supplies SQL query results. PyTorch defines the regression network. Ray Train allocates one worker/GPU, reports train/validation losses, and wraps per-epoch state in Ray checkpoints. MLflow records the same run's parameters, epoch metrics, evaluation metrics, and artifacts. FastAPI serves local predictions from the trained model, Evidently generates a local drift report, GitHub Actions defines CPU-safe validation, and the Model Card records governance information. Git versions the project and DVC tracks local database metadata.
 
 ## 7. Advantages and Limitations
 Advantages include a real public dataset, SQL-backed training input, chronological splitting, leakage prevention, GPU execution, checkpoint loading, and reproducible evidence artifacts. Limitations include one GPU, no distributed speedup, a modest dataset, no serving/monitoring/CI/CD, and no DVC remote.

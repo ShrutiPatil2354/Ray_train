@@ -1,0 +1,1 @@
+"""Local model-serving application for the trained Bike Demand model."""

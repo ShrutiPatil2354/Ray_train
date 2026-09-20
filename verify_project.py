@@ -14,6 +14,7 @@ from src.training import build_training_plan
 
 
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+CPU_MODE = "--cpu" in sys.argv
 
 
 def pass_fail(label: str, condition: bool) -> None:
@@ -43,6 +44,8 @@ def check_ray_train_api():
 
 
 def check_ray_gpu_resources():
+    if CPU_MODE:
+        return True
     try:
         import ray
         ray.init(ignore_reinit_error=True)
@@ -174,6 +177,30 @@ def check_mlflow_tracking():
         return False
 
 
+def check_fastapi_serving():
+    try:
+        from fastapi.testclient import TestClient
+        from src.data_ingestion import FEATURE_COLUMNS
+        from src.serving.app import create_app
+
+        response = TestClient(create_app()).post("/predict", json={"features": {name: 0.0 for name in FEATURE_COLUMNS}})
+        body = response.json()
+        return response.status_code == 200 and isinstance(body.get("predicted_cnt"), (float, int))
+    except Exception:
+        return False
+
+
+def check_evidently():
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "evidently_report.html")
+    return os.path.isfile(path) and os.path.getsize(path) > 0
+
+
+def check_governance_and_ci():
+    model_card = os.path.join(PROJECT_ROOT, "docs", "model_card.md")
+    workflow = os.path.join(PROJECT_ROOT, ".github", "workflows", "ci.yml")
+    return os.path.isfile(model_card) and os.path.getsize(model_card) > 0 and os.path.isfile(workflow)
+
+
 def check_git():
     result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
     return result.returncode == 0 and result.stdout.strip() == "true"
@@ -195,7 +222,7 @@ def main():
     pass_fail("Ray", check_ray())
     pass_fail("Ray Train API", check_ray_train_api())
     pass_fail("PyTorch", bool(torch.__version__))
-    pass_fail("CUDA", torch.cuda.is_available())
+    pass_fail("CUDA", CPU_MODE or torch.cuda.is_available())
     pass_fail("Ray GPU resources", check_ray_gpu_resources())
     pass_fail("Configuration", check_configuration())
     pass_fail("Bike database/schema", check_database())
@@ -207,6 +234,9 @@ def main():
     pass_fail("Ray checkpoint load", check_checkpoint())
     pass_fail("Test evaluation", check_evaluation())
     pass_fail("MLflow tracking", check_mlflow_tracking())
+    pass_fail("FastAPI serving", check_fastapi_serving())
+    pass_fail("Evidently monitoring", check_evidently())
+    pass_fail("CI and Model Card", check_governance_and_ci())
     pass_fail("Git", check_git())
     pass_fail("Git history", check_git_history())
     pass_fail("DVC database metadata", check_dvc())

@@ -18,6 +18,10 @@
 | Checkpoint | IMPLEMENTED + EXECUTED | 40 Ray checkpoint directories; epoch 40 state loaded |
 | Evaluation | IMPLEMENTED + EXECUTED | Test MAE, RMSE, and R2 generated from loaded checkpoint |
 | Experiment tracking | IMPLEMENTED + EXECUTED | MLflow run `8187694a1403403ba30573fc2b969a9c` finished with parameters, epoch metrics, test metrics, and artifacts |
+| CI/CD | IMPLEMENTED | `.github/workflows/ci.yml` defines CPU-safe install, syntax, tests, and verification steps; hosted Actions success is pending push |
+| Model serving | IMPLEMENTED + EXECUTED | FastAPI `/predict` returned HTTP 200 with a real numeric prediction |
+| Monitoring | IMPLEMENTED + EXECUTED | Evidently generated `ray_train_outputs/evidently_report.html` from project data/predictions |
+| Governance | IMPLEMENTED | `docs/model_card.md` describes the actual model and measured run |
 | Tests | IMPLEMENTED + EXECUTED | `5 passed` |
 | DVC | IMPLEMENTED + EXECUTED | `python -m dvc status`: data and pipelines up to date |
 | Git | IMPLEMENTED + EXECUTED | Clean branch tracking `origin/master`; project history exists |
