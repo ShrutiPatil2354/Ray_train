@@ -1,0 +1,13 @@
+ray==2.58.0
+matplotlib>=3.8.0
+PyYAML>=6.0
+pytest>=8.0.0
+dvc>=3.0.0
+scikit-learn>=1.4.0
+pandas>=2.0.0
+mlflow==3.16.1
+fastapi==0.141.1
+uvicorn==0.53.0
+httpx==0.28.1
+evidently==0.7.23
+
