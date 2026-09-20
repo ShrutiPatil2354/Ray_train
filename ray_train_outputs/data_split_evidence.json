@@ -1,0 +1,12 @@
+{
+  "split_sizes": {
+    "train": 90,
+    "validation": 30,
+    "test": 30
+  },
+  "target_names": [
+    "setosa",
+    "versicolor",
+    "virginica"
+  ]
+}

@@ -1,11 +1,11 @@
 seed: 42
-epochs: 30
-batch_size: 64
+epochs: 40
+batch_size: 16
 learning_rate: 0.001
 num_workers: 1
 use_gpu: true
 backend: gloo
-dataset_size: 2000
-num_features: 10
+input_dim: 4
+num_classes: 3
+database_path: data/iris.db
 output_dir: ray_train_outputs
-dataset_path: data/synthetic_regression_data.csv

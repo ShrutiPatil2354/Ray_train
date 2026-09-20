@@ -1,179 +1,46 @@
-# Ray Train CCA1 Project
+# Ray Train CCA1: SQLite Iris Classification
 
-## 1. Project title
-Ray Train with PyTorch on a Single NVIDIA GPU for MLOps CCA1
+## Objective
+This project demonstrates the CCA Model Development tool, Ray Train, in an end-to-end workflow using a real public dataset. The Iris dataset is loaded into SQLite, extracted with SQL, validated, preprocessed, split into train/validation/test sets, and used to train a PyTorch classifier through Ray Train.
 
-## 2. Objective
-This project demonstrates a practical MLOps workflow using Ray Train and PyTorch for a synthetic regression task. The goal is to train a real neural network, monitor training loss, persist metrics and artifacts, apply Ray-native checkpointing, and document the environment and limitations honestly.
+## Dataset
+- Dataset: Iris dataset
+- Source: `sklearn.datasets.load_iris`, originally introduced by Fisher (1936)
+- Records: 150
+- Features: 4 numeric measurements: sepal length, sepal width, petal length, petal width
+- Target: 3 flower classes: setosa, versicolor, virginica
+- Missing values: none after database validation
+- Duplicate feature/target groups: checked during ingestion
 
-## 3. MLOps context
-This assignment focuses on the MLOps lifecycle and the required tool categories. The implemented project uses:
-- Version Control: Git
-- Model Development: Ray Train + PyTorch
-- Lightweight metric logging: metrics are reported by Ray and persisted in CSV during training
-- Model Serving: not deployed in this project
-- CI/CD: discussed as a future integration, not implemented in this repository
-- Monitoring: not deployed in this project
-- Governance: documented as a future extension
+## Database workflow
+The training pipeline creates `data/iris.db`, with table `iris_dataset`:
 
-## 4. Ray Train introduction
-Ray Train is used to orchestrate distributed or parallel worker execution while keeping the PyTorch training loop explicit and reproducible. The project uses a single worker configuration because only one physical GPU is available on this laptop.
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key |
+| `sepal_length`, `sepal_width` | REAL | Sepal features |
+| `petal_length`, `petal_width` | REAL | Petal features |
+| `target` | INTEGER | Class label |
+| `target_name` | TEXT | Class name |
 
-## 5. Environment
-- Windows 11
-- Python 3.10.9
-- Ray 2.58.0
-- PyTorch 2.14.0+cu130
-- CUDA available: True
-- NVIDIA GeForce RTX 5060 Laptop GPU
+Training data is extracted using SQL from this table. The training worker does not read the legacy CSV artifact.
 
-## 6. Hardware
-The machine contains one physical NVIDIA GPU. The configuration intentionally uses one Ray worker and the Gloo backend because NCCL is not typically available in the Windows PyTorch + CUDA environment.
+## Preprocessing
+The data is split stratified into 90 training, 30 validation, and 30 test records. `StandardScaler` is fitted only on the training split and then applied to validation and test data. The fitted preprocessor is saved as `ray_train_outputs/preprocessor.pkl`.
 
-## 7. Project structure
-```text
-ray_train_cca1/
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── ray_train_demo.py
-├── verify_project.py
-├── src/
-│   ├── __init__.py
-│   ├── model.py
-│   ├── training.py
-│   └── utils.py
-├── configs/
-│   └── train_config.yaml
-├── data/
-│   ├── README.md
-│   ├── synthetic_regression_data.csv
-│   └── synthetic_regression_data.csv.dvc
-├── docs/
-│   ├── architecture.md
-│   ├── execution.md
-│   ├── limitations.md
-│   └── CCA1_REPORT_CONTENT.md
-├── ray_train_outputs/
-│   ├── training_metrics.csv
-│   ├── training_loss_graph.png
-│   └── ray_train_model_worker_0.pth
-├── tests/
-│   └── test_project.py
-├── .dvc/
-├── .dvcignore
-└── .git
-```
+## Model and training
+The PyTorch `IrisClassifier` contains linear layers `4 -> 32 -> 16 -> 3` with ReLU activations. It uses Adam, learning rate `0.001`, cross-entropy loss, batch size `16`, and 40 epochs.
 
-## 8. Installation
-PowerShell commands:
-```powershell
-cd D:\ray_train_cca1
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
+Ray configuration:
+- Ray workers: 1
+- GPU per worker: 1
+- `use_gpu`: `true`
+- Backend: Gloo
+- Hardware: NVIDIA GeForce RTX 5060 Laptop GPU
 
-## 9. Configuration
-The training configuration is loaded from `configs/train_config.yaml`.
+The one-worker configuration is the truthful experiment for this Windows machine with one physical GPU. Ray Train supports scalable multi-worker configurations, but multi-GPU execution was not performed.
 
-```yaml
-seed: 42
-epochs: 30
-batch_size: 64
-learning_rate: 0.001
-num_workers: 1
-use_gpu: true
-backend: gloo
-dataset_size: 2000
-num_features: 10
-output_dir: ray_train_outputs
-dataset_path: data/synthetic_regression_data.csv
-```
-
-The project uses `TorchConfig(backend="gloo")` because this is a Windows environment and NCCL is not the default cross-platform backend for PyTorch+Ray on Windows.
-
-## 10. How to run
-```powershell
-cd D:\ray_train_cca1
-.\.venv\Scripts\Activate.ps1
-python ray_train_demo.py
-python verify_project.py
-```
-
-## 11. Expected outputs
-The training script writes the following artifacts:
-- `ray_train_outputs/training_metrics.csv`
-- `ray_train_outputs/training_loss_graph.png`
-- `ray_train_outputs/ray_train_model_worker_0.pth`
-- a Ray checkpoint directory created during training
-
-## 12. Actual experiment results
-The project was executed successfully on the available hardware with:
-- 1 Ray worker
-- 1 physical GPU
-- CUDA available: True
-- GPU: NVIDIA GeForce RTX 5060 Laptop GPU
-- backend: gloo
-
-Observed regression loss:
-- Epochs: 30
-- Initial loss: 13.398599
-- Final loss: 0.035534
-- Absolute reduction: 13.363065
-
-This is a real model training result, not a fabricated value.
-
-## 13. Checkpointing
-The training loop writes per-epoch directories containing serialized model state, optimizer state, epoch, and configuration data, then wraps each directory with Ray-native `Checkpoint.from_directory(...)` for `train.report(...)`. The verification script loads model and optimizer state into fresh PyTorch objects and checks the required fields; a full resume-training workflow is not claimed.
-
-## 14. GPU verification
-The script verifies:
-- PyTorch version
-- Ray version
-- CUDA availability
-- CUDA version
-- GPU name
-- GPU memory
-- Ray GPU resources
-- requested GPU resource allocation
-- worker device selection
-
-## 15. Git usage
-This repository was initialized with Git.
-
-Commands used:
-```powershell
-git init
-git status
-git log
-```
-
-Git is used for versioning code, configuration, and documentation. This project does not claim multi-developer collaboration because that did not occur in this environment.
-
-## 16. DVC usage
-DVC is initialized locally and tracks `data/synthetic_regression_data.csv` through `data/synthetic_regression_data.csv.dvc`. `python -m dvc status` reports that data and pipelines are up to date. No DVC remote storage is configured or claimed.
-
-Commands used:
-```powershell
-dvc init
-dvc add data/synthetic_regression_data.csv
-dvc status
-```
-
-## 17. Limitations
-- Only one physical GPU was available.
-- Actual multi-GPU execution was not performed.
-- Windows environment required `gloo` rather than NCCL.
-- No multi-node cluster was used.
-- No production deployment was performed.
-- Synthetic regression data was used for a controlled classroom exercise.
-
-## 18. Future scalability
-The implementation is structured so that it can scale to larger datasets and additional workers when suitable GPU hardware and a compatible cluster environment are available. However, this project did not execute that larger-scale configuration.
-
-## 19. Reproducibility instructions
+## Installation and execution
 ```powershell
 cd D:\ray_train_cca1
 python -m venv .venv
@@ -181,31 +48,55 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python ray_train_demo.py
+python make_report_artifacts.py
 python verify_project.py
+python -m pytest -q
+python -m dvc status
 ```
 
-## 20. MLOps lifecycle overview
-The assignment requires a lifecycle view. This project implements the core phases while clearly distinguishing implemented versus future capabilities.
+## Generated evidence
+- `data/iris.db`: SQLite database generated from the public dataset
+- `ray_train_outputs/database_evidence.json`: schema, row count, and actual sample SQL result
+- `ray_train_outputs/data_split_evidence.json`: split sizes and class names
+- `ray_train_outputs/preprocessor.pkl`: training-fitted scaler
+- `ray_train_outputs/training_metrics.csv`: train loss, validation loss, validation accuracy, worker
+- `ray_train_outputs/training_loss_graph.png`: graph generated from the metrics CSV
+- `ray_train_outputs/evaluation_metrics.json`: held-out test metrics
+- `ray_train_outputs/test_predictions.csv`: test predictions
+- `ray_train_outputs/ray_train_model_worker_0.pth`: final model state
+- `ray_train_outputs/checkpoint_epoch_*`: per-epoch Ray checkpoint directories
 
-## 21. Tools table
-| MLOps Stage | Tool 1 | Tool 2 | Purpose | Implemented |
-| --- | --- | --- | --- | --- |
-| Version Control | Git | DVC | Code/data versioning | Git implemented; local DVC tracking implemented |
-| Lightweight metric logging | Ray metrics | CSV export | Track loss over epochs | Yes |
-| Model Development | Ray Train | PyTorch | Single-worker GPU training; distributed scaling supported by framework | Implemented actual path; scaling theoretical |
-| CI/CD | GitHub Actions | Jenkins | Automated validation | Future |
-| Model Serving | FastAPI | KServe | Inference endpoint deployment | Future |
-| Monitoring | Prometheus | Grafana | Runtime observability | Future |
-| Governance | Model Cards | OpenMetadata | Traceability and compliance | Future |
+Final measured test results from the loaded epoch-40 checkpoint:
+- Test accuracy: `0.900000`
+- Weighted precision: `0.902357`
+- Weighted recall: `0.900000`
+- Weighted F1: `0.899749`
 
-## 22. Claim audit summary
-The project claims only what was actually executed:
-- Ray Train used on a single worker with GPU
-- PyTorch model trained using CUDA-enabled GPU
-- CSV metrics produced by the executed training loop
-- loss graph generated from the recorded CSV data
-- Ray checkpoint directories stored and their serialized payload validated
-- Git history contains the project commit
-- DVC tracks the generated dataset locally; no remote storage is claimed
+## Ray checkpointing
+Each epoch creates a directory containing model state, optimizer state, epoch, and configuration, then wraps it with `Checkpoint.from_directory(...)` and sends it through `train.report(..., checkpoint=...)`. The final checkpoint is loaded into a fresh classifier for test evaluation. A full resume-training workflow is not claimed.
 
-The project does not claim multi-GPU parallelization, production deployment, or multi-node cluster execution.
+## MLOps tool selection
+| CCA category | Selected tool | Status |
+| --- | --- | --- |
+| Version Control and Collaboration | Git | Implemented and pushed; no multi-person collaboration claimed |
+| Model Development / Distributed Training | Ray Train + PyTorch | Implemented and executed with one worker/GPU |
+| Data storage required by workflow | SQLite | Implemented and used for SQL extraction |
+| Data versioning | DVC | Local database metadata tracked; no remote configured |
+| CI/CD, serving, monitoring, governance | Not selected | Not implemented because not required for this focused CCA workflow |
+
+## Limitations
+- One physical GPU was available, so actual multi-GPU or multi-node execution was not performed.
+- Gloo was used for the Windows environment; NCCL was not assumed.
+- The Iris dataset is small and suitable for coursework, not enterprise-scale benchmarking.
+- No speedup or distributed scaling result is claimed.
+- No external experiment tracker, serving API, monitoring stack, or CI service is implemented.
+- No DVC remote storage is configured.
+
+## Git and DVC
+Git versions the source, configuration, tests, documentation, and DVC metadata. DVC tracks the generated SQLite database through `data/iris.db.dvc`; its local status is verified with `python -m dvc status`. The database is reproducibly regenerated by the ingestion code, and no DVC remote is claimed.
+
+## Documentation
+- [docs/architecture.md](docs/architecture.md)
+- [docs/execution.md](docs/execution.md)
+- [docs/limitations.md](docs/limitations.md)
+- [docs/CCA1_REPORT_CONTENT.md](docs/CCA1_REPORT_CONTENT.md)

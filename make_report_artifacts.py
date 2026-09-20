@@ -23,7 +23,7 @@ if not rows:
     raise ValueError("The training metrics CSV is empty.")
 
 epochs = [int(row["epoch"]) for row in rows]
-losses = [float(row["loss"]) for row in rows]
+losses = [float(row["train_loss"]) for row in rows]
 
 
 print("=" * 60)
@@ -45,23 +45,21 @@ plt.figure(
     figsize=(10, 6)
 )
 
-plt.plot(
-    epochs,
-    losses,
-    marker="o"
-)
+plt.plot(epochs, losses, marker="o", label="Train loss")
+validation_losses = [float(row["val_loss"]) for row in rows]
+plt.plot(epochs, validation_losses, marker="x", label="Validation loss")
 
 plt.xlabel(
     "Epoch"
 )
 
-plt.ylabel(
-    "Training Loss"
-)
+plt.ylabel("Cross-entropy loss")
 
 plt.title(
-    "Ray Train - Training Loss vs Epoch"
+    "Ray Train - Iris Training and Validation Loss"
 )
+
+plt.legend()
 
 plt.grid(
     True
@@ -99,15 +97,15 @@ print(
 )
 
 print(
-    f"Initial loss     : {losses[0]:.6f}"
+    f"Initial train loss: {losses[0]:.6f}"
 )
 
 print(
-    f"Final loss       : {losses[-1]:.6f}"
+    f"Final train loss  : {losses[-1]:.6f}"
 )
 
 print(
-    f"Loss reduction   : {losses[0] - losses[-1]:.6f}"
+    f"Train reduction   : {losses[0] - losses[-1]:.6f}"
 )
 
 print()

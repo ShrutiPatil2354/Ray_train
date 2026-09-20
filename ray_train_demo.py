@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -6,8 +7,10 @@ import pandas as pd
 import ray
 import torch
 
-from src.model import save_synthetic_dataset_csv
-from src.training import build_training_plan, create_trainer
+from src.data_ingestion import create_database
+from src.evaluation import evaluate_checkpoint
+from src.preprocessing import prepare_dataset
+from src.training import build_training_plan, create_trainer, latest_checkpoint
 
 
 def print_environment_summary():
@@ -31,15 +34,16 @@ def save_graph_from_csv(metrics_path: str, output_dir: str):
     metrics_df = pd.read_csv(metrics_path)
     graph_path = os.path.join(output_dir, "training_loss_graph.png")
     plt.figure(figsize=(10, 6))
-    plt.plot(metrics_df["epoch"], metrics_df["loss"], marker="o", linewidth=2)
+    plt.plot(metrics_df["epoch"], metrics_df["train_loss"], marker="o", label="Train loss")
+    plt.plot(metrics_df["epoch"], metrics_df["val_loss"], marker="x", label="Validation loss")
     plt.xlabel("Epoch")
-    plt.ylabel("Training Loss")
-    plt.title("Ray Train - Training Loss vs Epoch")
+    plt.ylabel("Cross-entropy loss")
+    plt.title("Ray Train - Iris Training and Validation Loss")
+    plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(graph_path, dpi=300)
     plt.close()
-    print(f"Loss graph saved to: {graph_path}")
     return metrics_df
 
 
@@ -47,56 +51,43 @@ def main():
     config = build_training_plan()
     output_dir = config["output_dir"]
     os.makedirs(output_dir, exist_ok=True)
-    dataset_path = os.path.abspath(config["dataset_path"])
-    save_synthetic_dataset_csv(
-        dataset_path,
-        num_samples=int(config["dataset_size"]),
-        num_features=int(config["num_features"]),
-        seed=int(config["seed"]),
-    )
+
+    database_evidence = create_database(config["database_path"])
+    with open(os.path.join(output_dir, "database_evidence.json"), "w", encoding="utf-8") as file:
+        json.dump(database_evidence, file, indent=2)
+    print(f"Database: {database_evidence['database_path']}")
+    print(f"Table: {database_evidence['table']}")
+    print(f"Rows: {database_evidence['rows']}")
+    print(f"Columns: {len(database_evidence['columns'])}")
+    print(f"Sample query: {database_evidence['sample_query']}")
+    print(f"Sample result: {database_evidence['sample_rows'][0]}")
+    print("Training data loaded from database: PASS")
+
+    dataset = prepare_dataset(config["database_path"], output_dir, int(config["seed"]))
+    with open(os.path.join(output_dir, "data_split_evidence.json"), "w", encoding="utf-8") as file:
+        json.dump({"split_sizes": dataset["split_sizes"], "target_names": dataset["target_names"]}, file, indent=2)
 
     print_environment_summary()
-
     print("=" * 70)
     print("STARTING RAY TRAINING")
     print("=" * 70)
-
     ray.init(ignore_reinit_error=True)
     print(f"Ray GPU resources: {ray.available_resources().get('GPU', 0)}")
     print(f"Requested Ray workers: {config['num_workers']}")
     print(f"Requested GPU per worker: {1 if config['use_gpu'] else 0}")
     print(f"Torch backend: {config['backend']}")
-    trainer = create_trainer(config)
-    trainer.fit()
+    create_trainer(config, dataset).fit()
 
     metrics_path = os.path.join(output_dir, "training_metrics.csv")
-    if not os.path.exists(metrics_path):
-        raise FileNotFoundError(f"Training metrics were not written to: {metrics_path}")
-
     metrics_df = save_graph_from_csv(metrics_path, output_dir)
-    initial_loss = float(metrics_df["loss"].iloc[0])
-    final_loss = float(metrics_df["loss"].iloc[-1])
-    print(f"Initial loss: {initial_loss:.6f}")
-    print(f"Final loss: {final_loss:.6f}")
-    print(f"Absolute loss reduction: {initial_loss - final_loss:.6f}")
-
-    checkpoint_dirs = [name for name in os.listdir(output_dir) if name.startswith("checkpoint_epoch_")]
-    if checkpoint_dirs:
-        print("Checkpoint directories created:")
-        for name in checkpoint_dirs:
-            print(os.path.join(output_dir, name))
-    else:
-        print("No checkpoint directories found in output_dir.")
-
-    print("=" * 70)
-    print("OUTPUT FILES")
-    print("=" * 70)
-    print(f"Metrics CSV: {metrics_path}")
-    print(f"Loss graph: {os.path.join(output_dir, 'training_loss_graph.png')}")
-    print(f"Model directory: {output_dir}")
-
+    print(f"Final validation accuracy: {metrics_df['val_accuracy'].iloc[-1]:.6f}")
+    checkpoint_dir = latest_checkpoint(output_dir)
+    evaluation_metrics = evaluate_checkpoint(checkpoint_dir, dataset, config, output_dir)
+    print(f"Test accuracy: {evaluation_metrics['test_accuracy']:.6f}")
+    print(f"Test weighted F1: {evaluation_metrics['test_f1_weighted']:.6f}")
+    print(f"Loaded checkpoint epoch: {evaluation_metrics['checkpoint_epoch']}")
     ray.shutdown()
-    print("Training completed successfully.")
+    print("Training and evaluation completed successfully.")
 
 
 if __name__ == "__main__":

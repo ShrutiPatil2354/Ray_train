@@ -1,5 +1,5 @@
 # Data Directory
 
-This directory contains the synthetic regression dataset used in the project demonstration.
+This directory contains the SQLite database used by the training workflow.
 
-The dataset is generated programmatically by the training code and stored in `data/synthetic_regression_data.csv` when the workflow is run.
+`data/iris.db` is generated from the public scikit-learn Iris dataset by `src/data_ingestion.py`. Training extracts rows with SQL from the `iris_dataset` table; it does not train from the legacy synthetic CSV artifact.

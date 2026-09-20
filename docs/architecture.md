@@ -1,51 +1,49 @@
-# Architecture Documentation
+# Architecture
 
-## Actual executed architecture
-The project executed the following path on the current laptop:
+## Actual implemented and executed architecture
 
-User configuration
-        ↓
-Ray Train + TorchTrainer
-        ↓
-Single Ray worker
-        ↓
-PyTorch neural network
-        ↓
-NVIDIA RTX 5060 Laptop GPU
-        ↓
-Ray `train.report` metrics
-        ↓
-Ray `Checkpoint.from_directory`
-        ↓
-CSV, graph, model, and checkpoint artifacts
+```text
+Public Iris dataset
+        |
+        v
+SQLite database: data/iris.db
+        |
+        v
+SQL extraction and validation
+        |
+        v
+StandardScaler fitted on training split
+        |
+        v
+Train / validation / test split
+        |
+        v
+Ray TorchTrainer
+        |
+        v
+Ray Worker 0 -> PyTorch IrisClassifier -> RTX 5060 GPU
+        |
+        v
+Ray metrics and Checkpoint.from_directory
+        |
+        v
+Evaluation metrics, predictions, model, and artifacts
+```
 
-## Important note
-This is an executed architecture for a single-worker, single-GPU laptop setup. It is not a multi-node cluster architecture.
+## Scalable architecture: NOT EXECUTED on current single-GPU hardware
 
-## Scalable configuration — NOT EXECUTED on the current hardware
-Ray Train supports a scalable configuration such as:
+```text
+TorchTrainer
+        |
+        v
+Ray cluster
+        |
+        +--> Worker 0 -> GPU 0
+        +--> Worker 1 -> GPU 1
+        +--> Worker 2 -> GPU 2
+        |
+        v
+Distributed data-parallel training
+```
 
-User configuration
-        ↓
-Ray cluster scheduler
-        ↓
-Multiple Ray workers
-        ↓
-Distributed data-parallel workers
-        ↓
-PyTorch model replicas
-        ↓
-Multiple GPUs or nodes
-        ↓
-Aggregated metrics and checkpointing
-
-This configuration is supported by the framework, but was not experimentally demonstrated because only one physical GPU was available.
-
-## Components in this project
-- Ray scheduler: active during training
-- TorchTrainer: active during training
-- Model: executed in Python
-- GPU: one physical NVIDIA GPU detected and used
-- Metrics: stored in CSV
-- Checkpoint: stored using Ray Checkpoint
-- Artifacts: saved to `ray_train_outputs`
+Ray supports this larger configuration, but this project executed one worker and one physical GPU only.

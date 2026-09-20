@@ -1,13 +1,16 @@
 import csv
+import json
 import os
 import pickle
+import sqlite3
 import subprocess
 import sys
 
 import matplotlib.image as mpimg
 import torch
 
-from src.model import SimpleRegressionNet
+from src.data_ingestion import FEATURE_COLUMNS, TABLE_NAME, validate_database
+from src.model import IrisClassifier
 from src.training import build_training_plan
 
 
@@ -15,12 +18,11 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 def pass_fail(label: str, condition: bool) -> None:
-    status = "PASS" if condition else "FAIL"
-    print(f"{label:<20} {status}")
+    print(f"{label:<24} {'PASS' if condition else 'FAIL'}")
 
 
 def check_python():
-    return sys.version_info >= (3, 10, 0)
+    return sys.version_info >= (3, 10)
 
 
 def check_ray():
@@ -49,17 +51,13 @@ def check_cuda():
     return torch.cuda.is_available()
 
 
-def check_gpu():
-    return check_cuda() and torch.cuda.device_count() > 0
-
-
 def check_ray_gpu_resources():
     try:
         import ray
         ray.init(ignore_reinit_error=True)
-        value = ray.available_resources().get("GPU", 0)
+        resources = ray.available_resources().get("GPU", 0)
         ray.shutdown()
-        return float(value) > 0
+        return float(resources) >= 1
     except Exception:
         return False
 
@@ -68,132 +66,160 @@ def check_file(path):
     return os.path.exists(os.path.join(PROJECT_ROOT, path))
 
 
-def check_configured_dataset():
+def check_configuration():
     config = build_training_plan()
-    dataset_path = os.path.join(PROJECT_ROOT, config["dataset_path"])
-    return os.path.isfile(dataset_path) and os.path.getsize(dataset_path) > 0
+    return (
+        config["num_workers"] == 1
+        and config["use_gpu"] is True
+        and config["backend"] == "gloo"
+        and config["input_dim"] == len(FEATURE_COLUMNS)
+        and config["num_classes"] == 3
+    )
+
+
+def check_database():
+    try:
+        config = build_training_plan()
+        metadata = validate_database(config["database_path"])
+        return metadata["table"] == TABLE_NAME and metadata["rows"] == 150 and metadata["null_values"] == 0 and len(metadata["sample_rows"]) == 5
+    except Exception:
+        return False
+
+
+def check_database_evidence():
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "database_evidence.json")
+    if not os.path.isfile(path):
+        return False
+    with open(path, encoding="utf-8") as file:
+        evidence = json.load(file)
+    return evidence.get("table") == TABLE_NAME and evidence.get("rows") == 150 and evidence.get("sample_query")
+
+
+def check_preprocessing():
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "data_split_evidence.json")
+    preprocessor = os.path.join(PROJECT_ROOT, "ray_train_outputs", "preprocessor.pkl")
+    if not os.path.isfile(path) or not os.path.isfile(preprocessor):
+        return False
+    with open(path, encoding="utf-8") as file:
+        evidence = json.load(file)
+    return evidence.get("split_sizes") == {"train": 90, "validation": 30, "test": 30}
 
 
 def check_metrics():
-    metrics_path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "training_metrics.csv")
-    if not os.path.isfile(metrics_path):
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "training_metrics.csv")
+    if not os.path.isfile(path):
         return False
-    with open(metrics_path, newline="", encoding="utf-8") as file:
+    with open(path, newline="", encoding="utf-8") as file:
         rows = list(csv.DictReader(file))
-    if not rows or set(rows[0]) != {"epoch", "loss", "worker"}:
+    if not rows or set(rows[0]) != {"epoch", "train_loss", "val_loss", "val_accuracy", "worker"}:
         return False
     try:
         epochs = [int(row["epoch"]) for row in rows]
-        losses = [float(row["loss"]) for row in rows]
+        values = [[float(row[key]) for key in ("train_loss", "val_loss", "val_accuracy")] for row in rows]
         workers = [int(row["worker"]) for row in rows]
     except (KeyError, TypeError, ValueError):
         return False
-    return epochs == list(range(1, len(rows) + 1)) and all(torch.isfinite(torch.tensor(losses))) and workers == [0] * len(rows)
+    return (
+        epochs == list(range(1, len(rows) + 1))
+        and all(torch.isfinite(torch.tensor(row)).all().item() for row in values)
+        and all(0 <= row[2] <= 1 for row in values)
+        and workers == [0] * len(rows)
+    )
 
 
 def check_graph():
-    graph_path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "training_loss_graph.png")
-    if not os.path.isfile(graph_path):
-        return False
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "training_loss_graph.png")
     try:
-        image = mpimg.imread(graph_path)
+        image = mpimg.imread(path)
         return image.ndim in {2, 3} and image.shape[0] > 0 and image.shape[1] > 0
     except Exception:
         return False
 
 
-def check_model_and_checkpoint():
+def _load_checkpoint_state():
     output_dir = os.path.join(PROJECT_ROOT, "ray_train_outputs")
-    if not os.path.isdir(output_dir):
-        return False
-    model_paths = [os.path.join(output_dir, name) for name in os.listdir(output_dir) if name.startswith("ray_train_model_worker_") and name.endswith(".pth")]
-    checkpoint_exists = any(name.startswith("checkpoint_epoch_") for name in os.listdir(output_dir))
-    if not model_paths or not checkpoint_exists:
-        return False
+    names = [name for name in os.listdir(output_dir) if name.startswith("checkpoint_epoch_")]
+    if not names:
+        raise FileNotFoundError("No checkpoint directories found")
+    latest = max(names, key=lambda name: int(name.rsplit("_", 1)[-1]))
+    with open(os.path.join(output_dir, latest, "training_state.pkl"), "rb") as file:
+        return pickle.load(file)
+
+
+def check_checkpoint():
     try:
-        model_state = torch.load(model_paths[0], map_location="cpu", weights_only=True)
-        return isinstance(model_state, dict) and bool(model_state)
+        state = _load_checkpoint_state()
+        config = state["config"]
+        model = IrisClassifier(config["input_dim"], 32, config["num_classes"])
+        model.load_state_dict(state["model_state_dict"])
+        optimizer = torch.optim.Adam(model.parameters(), lr=float(config["learning_rate"]))
+        optimizer.load_state_dict(state["optimizer_state_dict"])
+        return isinstance(state["epoch"], int) and state["epoch"] == config["epochs"]
     except Exception:
         return False
 
 
-def check_checkpoint_restoration():
-    output_dir = os.path.join(PROJECT_ROOT, "ray_train_outputs")
-    if not os.path.isdir(output_dir):
+def check_model():
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "ray_train_model_worker_0.pth")
+    try:
+        state = torch.load(path, map_location="cpu", weights_only=True)
+        model = IrisClassifier()
+        model.load_state_dict(state)
+        return True
+    except Exception:
         return False
-    checkpoint_names = [name for name in os.listdir(output_dir) if name.startswith("checkpoint_epoch_")]
-    for name in sorted(checkpoint_names, key=lambda value: int(value.rsplit("_", 1)[-1]), reverse=True):
-        checkpoint_dir = os.path.join(output_dir, name)
-        if name.startswith("checkpoint_epoch_") and os.path.isdir(checkpoint_dir):
-            pickle_path = os.path.join(checkpoint_dir, "training_state.pkl")
-            if os.path.exists(pickle_path):
-                with open(pickle_path, "rb") as file:
-                    payload = pickle.load(file)
-                if not isinstance(payload, dict):
-                    return False
-                if not all(key in payload for key in ("model_state_dict", "optimizer_state_dict", "epoch", "config")):
-                    return False
-                config = payload["config"]
-                model = SimpleRegressionNet(input_dim=int(config["num_features"]), hidden_dim=32)
-                model.load_state_dict(payload["model_state_dict"])
-                optimizer = torch.optim.Adam(model.parameters(), lr=float(config["learning_rate"]))
-                optimizer.load_state_dict(payload["optimizer_state_dict"])
-                return (
-                    isinstance(payload.get("model_state_dict"), dict)
-                    and isinstance(payload.get("optimizer_state_dict"), dict)
-                    and isinstance(payload.get("epoch"), int)
-                    and isinstance(payload.get("config"), dict)
-                )
-    return False
+
+
+def check_evaluation():
+    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "evaluation_metrics.json")
+    predictions = os.path.join(PROJECT_ROOT, "ray_train_outputs", "test_predictions.csv")
+    if not os.path.isfile(path) or not os.path.isfile(predictions):
+        return False
+    with open(path, encoding="utf-8") as file:
+        metrics = json.load(file)
+    return metrics.get("test_records") == 30 and 0 <= metrics.get("test_accuracy", -1) <= 1 and metrics.get("checkpoint_epoch") == 40
 
 
 def check_git():
-    try:
-        result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
-        return result.returncode == 0 and result.stdout.strip() == "true"
-    except Exception:
-        return False
+    result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+    return result.returncode == 0 and result.stdout.strip() == "true"
 
 
 def check_git_history():
-    try:
-        result = subprocess.run(["git", "log", "-1", "--oneline"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
-        return result.returncode == 0 and bool(result.stdout.strip())
-    except Exception:
-        return False
+    result = subprocess.run(["git", "log", "-1", "--oneline"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def check_dvc():
-    dvc_dir = os.path.join(PROJECT_ROOT, ".dvc")
-    config_file = os.path.join(PROJECT_ROOT, ".dvc", "config")
-    dvcignore = os.path.join(PROJECT_ROOT, ".dvcignore")
-    dataset_tracking = os.path.join(PROJECT_ROOT, "data", "synthetic_regression_data.csv.dvc")
-    return os.path.exists(dvc_dir) and os.path.exists(config_file) and os.path.exists(dvcignore) and os.path.exists(dataset_tracking)
+    return all(
+        check_file(path)
+        for path in (".dvc", ".dvc/config", ".dvcignore", "data/iris.db.dvc")
+    )
 
 
 def main():
     print("PROJECT VERIFICATION")
-    print("=" * 70)
+    print("=" * 76)
     pass_fail("Python", check_python())
     pass_fail("Ray", check_ray())
     pass_fail("PyTorch", check_pytorch())
     pass_fail("Ray Train API", check_ray_train_api())
     pass_fail("CUDA", check_cuda())
-    pass_fail("GPU", check_gpu())
     pass_fail("Ray GPU resources", check_ray_gpu_resources())
-    pass_fail("Training script", check_file("ray_train_demo.py"))
-    pass_fail("Configuration", check_file("configs/train_config.yaml"))
-    pass_fail("Dataset artifact", check_configured_dataset())
+    pass_fail("Configuration", check_configuration())
+    pass_fail("Database schema/data", check_database())
+    pass_fail("Database evidence", check_database_evidence())
+    pass_fail("Preprocessing splits", check_preprocessing())
     pass_fail("Training metrics", check_metrics())
     pass_fail("Loss graph", check_graph())
-    pass_fail("Model/checkpoint", check_model_and_checkpoint())
-    pass_fail("Checkpoint payload", check_checkpoint_restoration())
+    pass_fail("Model artifact", check_model())
+    pass_fail("Ray checkpoint load", check_checkpoint())
+    pass_fail("Test evaluation", check_evaluation())
     pass_fail("Git", check_git())
     pass_fail("Git history", check_git_history())
-    pass_fail("DVC", check_dvc())
-    pass_fail("README", check_file("README.md"))
-    pass_fail("Docs", os.path.isdir(os.path.join(PROJECT_ROOT, "docs")))
-    print("=" * 70)
+    pass_fail("DVC database metadata", check_dvc())
+    pass_fail("Documentation", check_file("README.md") and os.path.isdir(os.path.join(PROJECT_ROOT, "docs")))
+    print("=" * 76)
 
 
 if __name__ == "__main__":
