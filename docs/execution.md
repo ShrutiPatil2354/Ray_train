@@ -29,7 +29,7 @@ python verify_project.py
 - `data/synthetic_regression_data.csv` and `data/synthetic_regression_data.csv.dvc`
 
 ## Interpretation
-The current project is a valid single-GPU demonstration of Ray Train, not a multi-GPU or multi-node distributed experiment. Checkpoint verification loads the serialized training-state payload and checks its required fields; it is not a full resume-training test.
+The current project is a valid single-GPU demonstration of Ray Train, not a multi-GPU or multi-node distributed experiment. Checkpoint verification loads the serialized model and optimizer state into fresh PyTorch objects and checks the epoch/configuration fields; it is not a full resume-training test.
 
 ## Screenshot checklist
 | Screenshot | Command or file | Visible evidence | Report section |

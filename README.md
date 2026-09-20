@@ -126,7 +126,7 @@ Observed regression loss:
 This is a real model training result, not a fabricated value.
 
 ## 13. Checkpointing
-The training loop writes per-epoch directories containing serialized model state, optimizer state, epoch, and configuration data, then wraps each directory with Ray-native `Checkpoint.from_directory(...)` for `train.report(...)`. The verification script loads the serialized payload and checks its required fields; a full resume-training workflow is not claimed.
+The training loop writes per-epoch directories containing serialized model state, optimizer state, epoch, and configuration data, then wraps each directory with Ray-native `Checkpoint.from_directory(...)` for `train.report(...)`. The verification script loads model and optimizer state into fresh PyTorch objects and checks the required fields; a full resume-training workflow is not claimed.
 
 ## 14. GPU verification
 The script verifies:

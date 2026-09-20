@@ -4,7 +4,7 @@ import torch
 
 from src.model import SimpleRegressionNet
 from src.training import build_training_plan, load_config
-from verify_project import check_checkpoint_restoration, check_metrics, check_ray_train_api
+from verify_project import check_checkpoint_restoration, check_configured_dataset, check_graph, check_metrics, check_model_and_checkpoint, check_ray_train_api
 
 
 def test_model_creation():
@@ -33,10 +33,14 @@ def test_project_files_exist():
     assert os.path.exists("configs/train_config.yaml")
     assert os.path.exists("ray_train_demo.py")
     assert os.path.exists("verify_project.py")
+    assert check_configured_dataset()
+    assert check_graph()
+    assert check_model_and_checkpoint()
 
 
 def test_checkpoint_payload_and_metrics_are_valid():
     assert check_checkpoint_restoration()
+    assert check_model_and_checkpoint()
     assert check_metrics()
 
 

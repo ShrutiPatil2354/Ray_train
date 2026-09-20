@@ -7,6 +7,7 @@ import sys
 import matplotlib.image as mpimg
 import torch
 
+from src.model import SimpleRegressionNet
 from src.training import build_training_plan
 
 
@@ -105,9 +106,15 @@ def check_model_and_checkpoint():
     output_dir = os.path.join(PROJECT_ROOT, "ray_train_outputs")
     if not os.path.isdir(output_dir):
         return False
-    model_exists = any(name.startswith("ray_train_model_worker_") and name.endswith(".pth") for name in os.listdir(output_dir))
+    model_paths = [os.path.join(output_dir, name) for name in os.listdir(output_dir) if name.startswith("ray_train_model_worker_") and name.endswith(".pth")]
     checkpoint_exists = any(name.startswith("checkpoint_epoch_") for name in os.listdir(output_dir))
-    return model_exists and checkpoint_exists
+    if not model_paths or not checkpoint_exists:
+        return False
+    try:
+        model_state = torch.load(model_paths[0], map_location="cpu", weights_only=True)
+        return isinstance(model_state, dict) and bool(model_state)
+    except Exception:
+        return False
 
 
 def check_checkpoint_restoration():
@@ -122,9 +129,17 @@ def check_checkpoint_restoration():
             if os.path.exists(pickle_path):
                 with open(pickle_path, "rb") as file:
                     payload = pickle.load(file)
+                if not isinstance(payload, dict):
+                    return False
+                if not all(key in payload for key in ("model_state_dict", "optimizer_state_dict", "epoch", "config")):
+                    return False
+                config = payload["config"]
+                model = SimpleRegressionNet(input_dim=int(config["num_features"]), hidden_dim=32)
+                model.load_state_dict(payload["model_state_dict"])
+                optimizer = torch.optim.Adam(model.parameters(), lr=float(config["learning_rate"]))
+                optimizer.load_state_dict(payload["optimizer_state_dict"])
                 return (
-                    isinstance(payload, dict)
-                    and isinstance(payload.get("model_state_dict"), dict)
+                    isinstance(payload.get("model_state_dict"), dict)
                     and isinstance(payload.get("optimizer_state_dict"), dict)
                     and isinstance(payload.get("epoch"), int)
                     and isinstance(payload.get("config"), dict)
