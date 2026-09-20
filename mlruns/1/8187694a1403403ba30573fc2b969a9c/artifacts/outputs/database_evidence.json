@@ -1,0 +1,73 @@
+{
+  "database_path": "D:\\ray_train_cca1\\data\\bike_sharing.db",
+  "table": "bike_rentals",
+  "rows": 731,
+  "columns": [
+    "instant",
+    "dteday",
+    "season",
+    "yr",
+    "mnth",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit",
+    "temp",
+    "atemp",
+    "hum",
+    "windspeed",
+    "casual",
+    "registered",
+    "cnt"
+  ],
+  "target": "cnt",
+  "excluded_leakage_columns": [
+    "casual",
+    "registered"
+  ],
+  "null_target_values": 0,
+  "duplicate_instant_values": 0,
+  "date_range": [
+    "2011-01-01",
+    "2012-12-31"
+  ],
+  "sample_query": "SELECT dteday, season, yr, mnth, cnt FROM bike_rentals ORDER BY instant LIMIT 5",
+  "sample_rows": [
+    [
+      "2011-01-01",
+      1,
+      0,
+      1,
+      985
+    ],
+    [
+      "2011-01-02",
+      1,
+      0,
+      1,
+      801
+    ],
+    [
+      "2011-01-03",
+      1,
+      0,
+      1,
+      1349
+    ],
+    [
+      "2011-01-04",
+      1,
+      0,
+      1,
+      1562
+    ],
+    [
+      "2011-01-05",
+      1,
+      0,
+      1,
+      1600
+    ]
+  ],
+  "source": "https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip"
+}

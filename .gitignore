@@ -14,3 +14,4 @@ secrets.*
 .dvc/tmp/
 .git/
 ray_train_outputs/checkpoint_epoch_*/
+CCA1_MLOps_Tools_Report_Template.docx.pdf

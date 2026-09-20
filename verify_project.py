@@ -155,6 +155,25 @@ def check_evaluation():
     return metrics.get("test_records") == 110 and metrics.get("checkpoint_epoch") == 40 and all(key in metrics for key in ("test_mae", "test_rmse", "test_r2"))
 
 
+def check_mlflow_tracking():
+    try:
+        import mlflow
+        from mlflow.tracking import MlflowClient
+
+        evidence_path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "mlflow_run.json")
+        if not os.path.isfile(evidence_path) or not os.path.isfile(os.path.join(PROJECT_ROOT, "mlflow.db")):
+            return False
+        with open(evidence_path, encoding="utf-8") as file:
+            evidence = json.load(file)
+        mlflow.set_tracking_uri(evidence["tracking_uri"])
+        run = MlflowClient().get_run(evidence["run_id"])
+        required_params = {"dataset", "epochs", "batch_size", "learning_rate", "num_workers", "use_gpu", "backend"}
+        required_metrics = {"test_mae", "test_rmse", "test_r2"}
+        return run.info.status == "FINISHED" and required_params.issubset(run.data.params) and required_metrics.issubset(run.data.metrics)
+    except Exception:
+        return False
+
+
 def check_git():
     result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
     return result.returncode == 0 and result.stdout.strip() == "true"
@@ -187,6 +206,7 @@ def main():
     pass_fail("Model artifact", check_model())
     pass_fail("Ray checkpoint load", check_checkpoint())
     pass_fail("Test evaluation", check_evaluation())
+    pass_fail("MLflow tracking", check_mlflow_tracking())
     pass_fail("Git", check_git())
     pass_fail("Git history", check_git_history())
     pass_fail("DVC database metadata", check_dvc())

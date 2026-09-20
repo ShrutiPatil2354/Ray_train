@@ -16,7 +16,7 @@ MLOps connects data, model development, testing, version control, reproducibilit
 4. Feature Engineering: calendar/weather variables selected; leakage columns excluded.
 5. Model Development: PyTorch MLP through Ray Train.
 6. Training and Evaluation: chronological validation and held-out test metrics.
-7. Experiment Tracking: CSV/JSON evidence artifacts, not an external tracking server.
+7. Experiment Tracking: MLflow logs parameters, per-epoch train/validation loss, final test metrics, and checkpoint/output artifacts.
 8. CI/CD: not selected for this focused CCA.
 9. Model Serving: not selected or implemented.
 10. Monitoring: not selected or implemented.
@@ -30,10 +30,11 @@ MLOps connects data, model development, testing, version control, reproducibilit
 | Model Development / Distributed Training | Ray Train + PyTorch | Assigned tool and parallel GPU feature | Executed with one worker/GPU | Ray logs/metrics/checkpoints |
 | Structured data workflow | SQLite | Required database-backed training path | Implemented and executed | `bike_sharing.db`, SQL evidence |
 | Data versioning | DVC | Existing selected project capability | Local metadata executed; no remote | `bike_sharing.db.dvc`, DVC status |
+| Experiment Tracking | MLflow | Required lifecycle category | Executed locally with a finished run | MLflow run ID, parameters, metrics, artifacts |
 | CI/CD, serving, monitoring, governance | Not selected | Not required for this focused CCA | Not implemented | Limitations |
 
 ## 6. Working/Features of Each Tool
-SQLite stores the validated Bike Sharing table and supplies SQL query results. PyTorch defines the regression network. Ray Train allocates one worker/GPU, reports train/validation losses, and wraps per-epoch state in Ray checkpoints. Git versions the project and DVC tracks local database metadata.
+SQLite stores the validated Bike Sharing table and supplies SQL query results. PyTorch defines the regression network. Ray Train allocates one worker/GPU, reports train/validation losses, and wraps per-epoch state in Ray checkpoints. MLflow records the same run's parameters, epoch metrics, evaluation metrics, and artifacts. Git versions the project and DVC tracks local database metadata.
 
 ## 7. Advantages and Limitations
 Advantages include a real public dataset, SQL-backed training input, chronological splitting, leakage prevention, GPU execution, checkpoint loading, and reproducible evidence artifacts. Limitations include one GPU, no distributed speedup, a modest dataset, no serving/monitoring/CI/CD, and no DVC remote.
@@ -54,8 +55,9 @@ Advantages include a real public dataset, SQL-backed training input, chronologic
 | 8 | `evaluation_metrics.json` | Test MAE/RMSE/R2 | Evaluation |
 | 9 | `python verify_project.py` | Checkpoint load and project PASS | Verification |
 | 10 | `python -m pytest -q` | Tests pass | Testing |
-| 11 | Git status/log | Version control | Git |
-| 12 | `python -m dvc status` | DVC metadata state | DVC |
+| 11 | MLflow run `8187694a1403403ba30573fc2b969a9c` | Parameters, metrics, checkpoint/output artifacts | Experiment tracking |
+| 12 | Git status/log | Version control | Git |
+| 13 | `python -m dvc status` | DVC metadata state | DVC |
 
 ## 10. Documentation
 Technical documentation is in `README.md`, `docs/architecture.md`, `docs/execution.md`, `docs/limitations.md`, and `docs/final_verification.md`.

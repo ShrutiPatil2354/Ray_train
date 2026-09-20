@@ -42,6 +42,9 @@ The final run created 40 epoch checkpoints. The test evaluation loaded epoch 40 
 - R2: 0.670831
 - Test records: 110
 
+## MLflow tracking
+The same Ray Train execution was logged to the local SQLite-backed MLflow experiment `bike-demand-ray-train`. Run ID: `8187694a1403403ba30573fc2b969a9c`. The run finished with training parameters, per-epoch train/validation losses, final MAE/RMSE/R2, output artifacts, and the final checkpoint artifact.
+
 Artifacts are `training_metrics.csv`, `training_loss_graph.png`, `evaluation_metrics.json`, `test_predictions.csv`, `ray_train_model_worker_0.pth`, and checkpoint directories.
 
 ## Screenshot checklist

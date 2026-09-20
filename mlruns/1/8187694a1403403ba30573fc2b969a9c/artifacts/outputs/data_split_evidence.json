@@ -1,0 +1,12 @@
+{
+  "split_sizes": {
+    "train": 511,
+    "validation": 110,
+    "test": 110
+  },
+  "split_dates": {
+    "train_end": "2012-05-25",
+    "validation_end": "2012-09-12",
+    "test_end": "2012-12-31"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "tracking_uri": "sqlite:///mlflow.db",
+  "experiment": "bike-demand-ray-train",
+  "run_id": "8187694a1403403ba30573fc2b969a9c",
+  "artifact_uri": "file:///D:/ray_train_cca1/mlruns/1/8187694a1403403ba30573fc2b969a9c/artifacts"
+}

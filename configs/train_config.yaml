@@ -9,3 +9,5 @@ input_dim: 11
 hidden_dim: 64
 database_path: data/bike_sharing.db
 output_dir: ray_train_outputs
+mlflow_tracking_uri: sqlite:///mlflow.db
+mlflow_experiment: bike-demand-ray-train

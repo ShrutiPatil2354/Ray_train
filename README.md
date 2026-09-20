@@ -60,6 +60,8 @@ The final epoch-40 checkpoint was loaded and evaluated on 110 chronological test
 - `ray_train_outputs/training_loss_graph.png`: graph generated from the CSV
 - `ray_train_outputs/evaluation_metrics.json`: MAE, RMSE, R2
 - `ray_train_outputs/test_predictions.csv`: held-out predictions
+- `ray_train_outputs/mlflow_run.json`: finished MLflow run ID and tracking URI
+- `mlflow.db` and `mlruns/`: local MLflow experiment database and artifacts
 - `ray_train_outputs/ray_train_model_worker_0.pth`: final model state
 - `ray_train_outputs/checkpoint_epoch_*`: Ray checkpoint directories
 
@@ -73,7 +75,8 @@ Each epoch writes model state, optimizer state, epoch, and configuration to a di
 | Model Development / Distributed Training | Ray Train + PyTorch | Implemented and executed with one worker/GPU |
 | Structured data storage | SQLite | Implemented and used for SQL extraction |
 | Data versioning | DVC | Local database metadata tracked; no remote configured |
-| Experiment tracking, CI/CD, serving, monitoring, governance | Not selected | Not implemented because unnecessary for this focused CCA workflow |
+| Experiment Tracking | MLflow | Implemented and executed locally with parameters, losses, test metrics, and checkpoint artifacts |
+| CI/CD, serving, monitoring, governance | Not selected | Not implemented because unnecessary for this focused CCA workflow |
 
 ## Limitations
 - One GPU only; no multi-GPU, multi-node, speedup, or cloud claims.

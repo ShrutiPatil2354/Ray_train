@@ -7,7 +7,7 @@ from src.data_ingestion import FEATURE_COLUMNS, TABLE_NAME, create_database, loa
 from src.model import BikeDemandRegressor
 from src.preprocessing import prepare_dataset
 from src.training import build_training_plan, load_config
-from verify_project import check_checkpoint, check_database, check_database_evidence, check_evaluation, check_metrics, check_model, check_preprocessing, check_ray_train_api
+from verify_project import check_checkpoint, check_database, check_database_evidence, check_evaluation, check_metrics, check_mlflow_tracking, check_model, check_preprocessing, check_ray_train_api
 
 
 def test_database_creation_schema_and_sql(tmp_path):
@@ -61,4 +61,5 @@ def test_project_artifacts_and_verification_logic():
     assert check_model()
     assert check_checkpoint()
     assert check_evaluation()
+    assert check_mlflow_tracking()
     assert check_ray_train_api()
