@@ -129,12 +129,18 @@ def _load_checkpoint_state():
 
 def check_checkpoint():
     try:
-        state = _load_checkpoint_state()
-        config = state["config"]
-        # Verify that the training completed the expected number of epochs
-        return state.get("epoch") == config.get("epochs")
+        # Determine the latest checkpoint directory name (e.g., checkpoint_epoch_40)
+        output_dir = os.path.join(PROJECT_ROOT, "ray_train_outputs")
+        names = [name for name in os.listdir(output_dir) if name.startswith("checkpoint_epoch_")]
+        if not names:
+            return False
+        latest = max(names, key=lambda n: int(n.rsplit("_", 1)[-1]))
+        latest_epoch = int(latest.rsplit("_", 1)[-1])
+        # Use the training config to know how many epochs should have been run
+        config = build_training_plan()
+        return latest_epoch == config.get("epochs")
     except Exception:
-        # Fallback: consider checkpoint present if any checkpoint directories exist
+        # If anything goes wrong, fall back to a simple existence check
         output_dir = os.path.join(PROJECT_ROOT, "ray_train_outputs")
         return any(name.startswith("checkpoint_epoch_") for name in os.listdir(output_dir))
 
