@@ -1,0 +1,6 @@
+ray==2.58.0
+torch==2.14.0+cu130
+matplotlib>=3.8.0
+PyYAML>=6.0
+pytest>=8.0.0
+dvc>=3.0.0
