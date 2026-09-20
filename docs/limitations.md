@@ -1,10 +1,10 @@
 # Limitations
 
-- Only one physical NVIDIA GPU was available.
-- Actual multi-GPU and multi-node Ray execution was not performed.
+- Only one physical NVIDIA GPU was available, so actual multi-GPU and multi-node Ray execution was not performed.
 - Gloo was used on Windows; NCCL was not assumed.
-- The Iris dataset is small and intended for an academic demonstration.
-- No distributed speedup benchmark is claimed.
-- No CI/CD, serving, monitoring, governance, or external experiment tracker was selected or implemented for this focused CCA workflow.
-- DVC has local database tracking metadata but no remote storage.
-- Checkpoint state loading and inference were tested; resume-training was not.
+- The UCI Bike Sharing day-level dataset is appropriate for coursework but is not an enterprise-scale benchmark.
+- No distributed speedup is claimed.
+- `casual` and `registered` are deliberately excluded to avoid target leakage.
+- No CI/CD, serving API, monitoring stack, or external experiment tracker was selected for this focused CCA workflow.
+- DVC locally tracks database metadata; no DVC remote storage is configured.
+- Checkpoint loading and test inference were executed; resume-training was not.

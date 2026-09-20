@@ -1,11 +1,11 @@
 seed: 42
 epochs: 40
-batch_size: 16
+batch_size: 32
 learning_rate: 0.001
 num_workers: 1
 use_gpu: true
 backend: gloo
-input_dim: 4
-num_classes: 3
-database_path: data/iris.db
+input_dim: 11
+hidden_dim: 64
+database_path: data/bike_sharing.db
 output_dir: ray_train_outputs

@@ -1,0 +1,5 @@
+outs:
+- md5: 120f89fec43487353dadcaa85ec43e87
+  size: 77824
+  hash: md5
+  path: bike_sharing.db

@@ -1,8 +1,7 @@
 {
-  "test_accuracy": 0.9,
-  "test_precision_weighted": 0.9023569023569024,
-  "test_recall_weighted": 0.9,
-  "test_f1_weighted": 0.8997493734335839,
+  "test_mae": 901.0818481445312,
+  "test_rmse": 1147.6854425320555,
+  "test_r2": 0.6708308458328247,
   "checkpoint_epoch": 40,
-  "test_records": 30
+  "test_records": 110
 }

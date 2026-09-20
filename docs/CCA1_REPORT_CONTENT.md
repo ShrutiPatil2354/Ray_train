@@ -1,132 +1,81 @@
 # MLOps CCA1 Report Content
 
 ## 1. Title Page
-Ray Train with PyTorch and SQLite for Iris Classification
+Ray Train with PyTorch and SQLite for UCI Bike Sharing Demand Regression
 
-## 2. Purpose
-The project demonstrates the CCA Model Development tool, Ray Train, in a complete real-data workflow. A public Iris dataset is stored in SQLite, extracted using SQL, preprocessed, split, trained with PyTorch through Ray Train, evaluated on held-out test data, and saved with Ray checkpoints.
+## 2. Purpose of the Tool
+Ray Train is the selected Model Development tool. This project uses it to execute a PyTorch regression model with GPU resource allocation, metrics reporting, and checkpointing.
 
-## 3. Introduction to MLOps
-MLOps applies software engineering practices to machine-learning systems so that data, code, configuration, training, evaluation, and artifacts can be reproduced and verified.
+## 3. Introduction to MLOps and Importance
+MLOps connects data, model development, testing, version control, reproducibility, and evaluation. The database-backed workflow makes the source data, SQL extraction, preprocessing, training, checkpoint, and test metrics inspectable.
 
-## 4. Importance of MLOps
-The workflow makes the model process traceable: the database is validated, preprocessing is recorded, training metrics are saved, the checkpoint is loaded for evaluation, and Git versions the implementation.
-
-## 5. MLOps Lifecycle
-1. Data Collection: public Iris dataset loaded through scikit-learn.
-2. Data Preparation: Iris records inserted into SQLite.
-3. Data Validation: schema, row count, nulls, duplicates, and SQL sample checked.
-4. Feature Engineering: standardization fitted only on training data.
-5. Model Development: PyTorch classifier executed through Ray Train.
-6. Training and Evaluation: validation metrics during training and test metrics after checkpoint loading.
-7. Experiment Tracking: lightweight CSV and JSON metric artifacts, not an external tracking server.
-8. CI/CD: not selected for this focused CCA workflow.
+## 4. Stages of the MLOps Lifecycle
+1. Data Collection: UCI Bike Sharing Dataset.
+2. Data Preparation: raw `day.csv` downloaded and ingested into SQLite.
+3. Data Validation: schema, row count, target nulls, duplicates, date range, and SQL sample.
+4. Feature Engineering: calendar/weather variables selected; leakage columns excluded.
+5. Model Development: PyTorch MLP through Ray Train.
+6. Training and Evaluation: chronological validation and held-out test metrics.
+7. Experiment Tracking: CSV/JSON evidence artifacts, not an external tracking server.
+8. CI/CD: not selected for this focused CCA.
 9. Model Serving: not selected or implemented.
 10. Monitoring: not selected or implemented.
 11. Governance: not selected or implemented.
-12. Continuous Improvement: Git history, tests, and verified artifacts support future changes.
+12. Continuous Improvement: Git history, tests, and reproducible evidence support changes.
 
-## 6. Tools Used
-| CCA category | Selected tool | Why | Implemented/executed | Evidence |
+## 5. Tools Used in Each Stage
+| CCA category | Selected tool | Why needed | Implemented/executed | Evidence |
 | --- | --- | --- | --- | --- |
-| Version Control and Collaboration | Git | Mandatory CCA category | Implemented; no multi-person collaboration claimed | Git history and GitHub repository |
-| Model Development / Distributed Training | Ray Train + PyTorch | Assigned CCA tool and feature | Executed with one worker and one GPU | Training log, metrics, checkpoints |
-| Database data storage | SQLite | Required for reproducible local data workflow | Implemented and executed | `data/iris.db`, SQL evidence |
-| Data versioning | DVC | Existing project capability and database metadata tracking | Local tracking executed; no remote | `data/iris.db.dvc`, DVC status |
-| CI/CD, serving, monitoring, governance | Not selected | Not required for this focused implementation | Not implemented | Explicit limitation |
+| Version Control and Collaboration | Git | Mandatory CCA category | Implemented; collaboration not claimed | Git history/GitHub |
+| Model Development / Distributed Training | Ray Train + PyTorch | Assigned tool and parallel GPU feature | Executed with one worker/GPU | Ray logs/metrics/checkpoints |
+| Structured data workflow | SQLite | Required database-backed training path | Implemented and executed | `bike_sharing.db`, SQL evidence |
+| Data versioning | DVC | Existing selected project capability | Local metadata executed; no remote | `bike_sharing.db.dvc`, DVC status |
+| CI/CD, serving, monitoring, governance | Not selected | Not required for this focused CCA | Not implemented | Limitations |
 
-## 7. Ray Train Introduction
-Ray Train provides worker orchestration for PyTorch training. The implementation uses `TorchTrainer`, `ScalingConfig`, `TorchConfig(backend="gloo")`, `train.report`, and Ray `Checkpoint.from_directory`.
+## 6. Working/Features of Each Tool
+SQLite stores the validated Bike Sharing table and supplies SQL query results. PyTorch defines the regression network. Ray Train allocates one worker/GPU, reports train/validation losses, and wraps per-epoch state in Ray checkpoints. Git versions the project and DVC tracks local database metadata.
 
-## 8. Working
-The driver creates and validates SQLite, extracts records through SQL, standardizes the split data, and passes the processed arrays to the Ray worker. Worker 0 trains `IrisClassifier` on CUDA, reports train/validation metrics, and creates a checkpoint after each epoch.
+## 7. Advantages and Limitations
+Advantages include a real public dataset, SQL-backed training input, chronological splitting, leakage prevention, GPU execution, checkpoint loading, and reproducible evidence artifacts. Limitations include one GPU, no distributed speedup, a modest dataset, no serving/monitoring/CI/CD, and no DVC remote.
 
-## 9. Features
-- Real public dataset and SQLite storage
-- SQL extraction and validation
-- Stratified train/validation/test split
-- Training-only scaler fitting to avoid leakage
-- CUDA-enabled PyTorch classification
-- Ray metric reporting and per-epoch checkpointing
-- Held-out test evaluation from the loaded checkpoint
+## 8. Practical Implementation
+`src/data_ingestion.py` downloads and validates UCI data, creates `bike_rentals`, and extracts rows through SQL. `src/preprocessing.py` fits the feature scaler on the first 70% only. `src/training.py` executes `BikeDemandRegressor` through `TorchTrainer`. `src/evaluation.py` loads epoch 40 and calculates test MAE, RMSE, and R2.
 
-## 10. Advantages
-- Uses a meaningful real dataset instead of synthetic training data.
-- Keeps the database local and reproducible on Windows.
-- Produces evidence for every major pipeline stage.
-- Uses the assigned Ray Train tool without adding unrelated infrastructure.
-
-## 11. Limitations
-- One physical GPU was available, so multi-GPU and multi-node execution was not performed.
-- Gloo was used on Windows; no NCCL claim is made.
-- Iris is a small academic dataset and is not an enterprise-scale benchmark.
-- No speedup, cloud execution, serving, monitoring, CI/CD, or DVC remote is claimed.
-- Checkpoint loading and inference were tested, but resume-training was not.
-
-## 12. Implementation
-The implementation is distributed across `src/data_ingestion.py`, `src/preprocessing.py`, `src/model.py`, `src/training.py`, and `src/evaluation.py`. The entry point is `ray_train_demo.py`.
-
-## 13. Architecture
-### Actual architecture
-```text
-Real Iris dataset -> SQLite -> SQL extraction -> validation -> preprocessing
--> train/validation/test -> Ray TorchTrainer -> Ray Worker 0
--> PyTorch IrisClassifier -> RTX 5060 GPU -> Ray checkpoint
--> test evaluation -> final artifacts
-```
-
-### Scalable architecture: NOT EXECUTED on current single-GPU hardware
-```text
-TorchTrainer -> Ray cluster -> Worker 0/GPU 0, Worker 1/GPU 1, Worker 2/GPU 2
--> distributed data-parallel training -> aggregated metrics/checkpoints
-```
-
-## 14. Configuration
-The executed configuration uses 40 epochs, batch size 16, learning rate 0.001, input dimension 4, three classes, one worker, GPU enabled, Gloo backend, and `data/iris.db` as the database path.
-
-## 15. Execution
-The final workflow commands are:
-```powershell
-python ray_train_demo.py
-python make_report_artifacts.py
-python verify_project.py
-python -m pytest -q
-python -m dvc status
-```
-The run printed the database path, table, row count, SQL sample query/result, `Training data loaded from database: PASS`, CUDA worker evidence, checkpoint creation, and test evaluation.
-
-## 16. Results
-The final run used 150 database records with 90/30/30 train/validation/test splits. The held-out epoch-40 checkpoint produced test accuracy `0.900000`, weighted precision `0.902357`, weighted recall `0.900000`, and weighted F1 `0.899749` on 30 test records. Training and validation loss history is stored in `ray_train_outputs/training_metrics.csv` and graphed in `training_loss_graph.png`.
-
-## 17. Screenshots
+## 9. Screenshots
 | Screenshot | Exact command/file | Claim proved | Report section |
 | --- | --- | --- | --- |
-| 1 | `python ray_train_demo.py` | Environment and GPU | Execution |
-| 2 | `ray_train_outputs/database_evidence.json` | SQLite table, rows, SQL result | Data pipeline |
-| 3 | Training terminal | Ray resource 1.0 and worker CUDA device | Ray Train |
-| 4 | Training terminal | Train/validation metrics | Results |
-| 5 | `ray_train_outputs/training_loss_graph.png` | Graph generated from CSV | Results |
-| 6 | `ray_train_outputs/evaluation_metrics.json` | Test evaluation | Evaluation |
-| 7 | `python verify_project.py` | Checkpoint load PASS | Checkpointing |
-| 8 | `python -m pytest -q` | Tests pass | Testing |
-| 9 | `git status --short --branch; git log -1 --oneline` | Git history | Version control |
-| 10 | `python -m dvc status` | DVC status | Data versioning |
+| 1 | UCI download output or `database_evidence.json` | Real dataset source | Dataset |
+| 2 | `database_evidence.json` | SQLite table, schema, row count, SQL | Database |
+| 3 | `python ray_train_demo.py` | Database validation and leakage exclusion | Data validation |
+| 4 | `data_split_evidence.json` | Chronological split | Preprocessing |
+| 5 | Training terminal | Ray GPU resource and CUDA worker | Ray Train |
+| 6 | Training terminal | Train/validation losses | Results |
+| 7 | `training_loss_graph.png` | Graph from actual CSV | Results |
+| 8 | `evaluation_metrics.json` | Test MAE/RMSE/R2 | Evaluation |
+| 9 | `python verify_project.py` | Checkpoint load and project PASS | Verification |
+| 10 | `python -m pytest -q` | Tests pass | Testing |
+| 11 | Git status/log | Version control | Git |
+| 12 | `python -m dvc status` | DVC metadata state | DVC |
 
-## 18. Real-world Use Cases
-Ray Train can support larger classification workloads such as image, text, and tabular learning on multiple workers. Those scalable workloads are supported by the framework but were not executed in this project.
+## 10. Documentation
+Technical documentation is in `README.md`, `docs/architecture.md`, `docs/execution.md`, and `docs/limitations.md`.
 
-## 19. Conclusion
-The project demonstrates the assigned Ray Train tool with a real dataset, real SQLite data access, GPU training, checkpoint loading, and held-out evaluation while remaining honest about the single-GPU limitation.
+## 11. Real-world Use Cases
+Ray Train can scale tabular demand forecasting to larger datasets and worker groups. This project executed only the single-worker, single-GPU configuration available on the development machine.
 
-## 20. Learning Outcomes
-- Database-backed ML data access and validation
-- Leakage-safe preprocessing and dataset splitting
-- Practical Ray Train and PyTorch execution
-- Checkpoint loading and test evaluation
-- Git, DVC, testing, and evidence-based reporting
+## 12. Conclusion
+The project demonstrates the assigned Ray Train tool with a real UCI dataset, SQLite database retrieval, leakage-safe chronological preprocessing, GPU regression training, Ray checkpoint loading, and held-out evaluation.
 
-## 21. References
+## 13. Learning Outcomes
+- Database-backed ML ingestion and SQL validation
+- Time-aware train/validation/test splitting
+- Target-leakage prevention
+- Ray Train and PyTorch GPU execution
+- Regression evaluation with MAE, RMSE, and R2
+- Evidence-based Git, DVC, testing, and reporting
+
+## 14. References
+- UCI Bike Sharing Dataset: https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset
 - Ray documentation: https://docs.ray.io/
 - PyTorch documentation: https://pytorch.org/docs/
-- scikit-learn Iris dataset documentation: https://scikit-learn.org/stable/auto_examples/datasets/plot_iris_dataset.html
-- Fisher, R. A. (1936), The use of multiple measurements in taxonomic problems.
+- Fanaee-T, H. and Gama, J. (2014), Event labeling combining ensemble detectors and background knowledge.

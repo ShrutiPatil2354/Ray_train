@@ -53,10 +53,10 @@ plt.xlabel(
     "Epoch"
 )
 
-plt.ylabel("Cross-entropy loss")
+plt.ylabel("Mean squared error loss")
 
 plt.title(
-    "Ray Train - Iris Training and Validation Loss"
+    "Ray Train - Bike Demand Training and Validation Loss"
 )
 
 plt.legend()

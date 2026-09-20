@@ -1,5 +1,5 @@
 """Ray Train CCA1 project package."""
 
-from .model import IrisClassifier
+from .model import BikeDemandRegressor
 
-__all__ = ["IrisClassifier"]
+__all__ = ["BikeDemandRegressor"]

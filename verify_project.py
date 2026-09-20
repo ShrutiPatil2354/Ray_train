@@ -2,15 +2,14 @@ import csv
 import json
 import os
 import pickle
-import sqlite3
 import subprocess
 import sys
 
 import matplotlib.image as mpimg
 import torch
 
-from src.data_ingestion import FEATURE_COLUMNS, TABLE_NAME, validate_database
-from src.model import IrisClassifier
+from src.data_ingestion import FEATURE_COLUMNS, LEAKAGE_COLUMNS, TABLE_NAME, validate_database
+from src.model import BikeDemandRegressor
 from src.training import build_training_plan
 
 
@@ -18,7 +17,7 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 def pass_fail(label: str, condition: bool) -> None:
-    print(f"{label:<24} {'PASS' if condition else 'FAIL'}")
+    print(f"{label:<28} {'PASS' if condition else 'FAIL'}")
 
 
 def check_python():
@@ -33,10 +32,6 @@ def check_ray():
         return False
 
 
-def check_pytorch():
-    return bool(torch.__version__)
-
-
 def check_ray_train_api():
     try:
         from ray.train import Checkpoint, ScalingConfig
@@ -47,17 +42,13 @@ def check_ray_train_api():
         return False
 
 
-def check_cuda():
-    return torch.cuda.is_available()
-
-
 def check_ray_gpu_resources():
     try:
         import ray
         ray.init(ignore_reinit_error=True)
-        resources = ray.available_resources().get("GPU", 0)
+        value = float(ray.available_resources().get("GPU", 0))
         ray.shutdown()
-        return float(resources) >= 1
+        return value >= 1
     except Exception:
         return False
 
@@ -68,20 +59,13 @@ def check_file(path):
 
 def check_configuration():
     config = build_training_plan()
-    return (
-        config["num_workers"] == 1
-        and config["use_gpu"] is True
-        and config["backend"] == "gloo"
-        and config["input_dim"] == len(FEATURE_COLUMNS)
-        and config["num_classes"] == 3
-    )
+    return config["input_dim"] == len(FEATURE_COLUMNS) and config["num_workers"] == 1 and config["use_gpu"] is True and config["backend"] == "gloo"
 
 
 def check_database():
     try:
-        config = build_training_plan()
-        metadata = validate_database(config["database_path"])
-        return metadata["table"] == TABLE_NAME and metadata["rows"] == 150 and metadata["null_values"] == 0 and len(metadata["sample_rows"]) == 5
+        metadata = validate_database(build_training_plan()["database_path"])
+        return metadata["table"] == TABLE_NAME and metadata["rows"] == 731 and metadata["target"] == "cnt" and set(metadata["excluded_leakage_columns"]) == LEAKAGE_COLUMNS - {"cnt"}
     except Exception:
         return False
 
@@ -92,7 +76,7 @@ def check_database_evidence():
         return False
     with open(path, encoding="utf-8") as file:
         evidence = json.load(file)
-    return evidence.get("table") == TABLE_NAME and evidence.get("rows") == 150 and evidence.get("sample_query")
+    return evidence.get("table") == TABLE_NAME and evidence.get("rows") == 731 and evidence.get("sample_query", "").startswith("SELECT")
 
 
 def check_preprocessing():
@@ -102,7 +86,7 @@ def check_preprocessing():
         return False
     with open(path, encoding="utf-8") as file:
         evidence = json.load(file)
-    return evidence.get("split_sizes") == {"train": 90, "validation": 30, "test": 30}
+    return evidence.get("split_sizes") == {"train": 511, "validation": 110, "test": 110}
 
 
 def check_metrics():
@@ -111,26 +95,20 @@ def check_metrics():
         return False
     with open(path, newline="", encoding="utf-8") as file:
         rows = list(csv.DictReader(file))
-    if not rows or set(rows[0]) != {"epoch", "train_loss", "val_loss", "val_accuracy", "worker"}:
+    if not rows or set(rows[0]) != {"epoch", "train_loss", "val_loss", "worker"}:
         return False
     try:
         epochs = [int(row["epoch"]) for row in rows]
-        values = [[float(row[key]) for key in ("train_loss", "val_loss", "val_accuracy")] for row in rows]
+        values = [[float(row["train_loss"]), float(row["val_loss"])] for row in rows]
         workers = [int(row["worker"]) for row in rows]
     except (KeyError, TypeError, ValueError):
         return False
-    return (
-        epochs == list(range(1, len(rows) + 1))
-        and all(torch.isfinite(torch.tensor(row)).all().item() for row in values)
-        and all(0 <= row[2] <= 1 for row in values)
-        and workers == [0] * len(rows)
-    )
+    return epochs == list(range(1, len(rows) + 1)) and all(torch.isfinite(torch.tensor(row)).all().item() for row in values) and workers == [0] * len(rows)
 
 
 def check_graph():
-    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "training_loss_graph.png")
     try:
-        image = mpimg.imread(path)
+        image = mpimg.imread(os.path.join(PROJECT_ROOT, "ray_train_outputs", "training_loss_graph.png"))
         return image.ndim in {2, 3} and image.shape[0] > 0 and image.shape[1] > 0
     except Exception:
         return False
@@ -139,8 +117,6 @@ def check_graph():
 def _load_checkpoint_state():
     output_dir = os.path.join(PROJECT_ROOT, "ray_train_outputs")
     names = [name for name in os.listdir(output_dir) if name.startswith("checkpoint_epoch_")]
-    if not names:
-        raise FileNotFoundError("No checkpoint directories found")
     latest = max(names, key=lambda name: int(name.rsplit("_", 1)[-1]))
     with open(os.path.join(output_dir, latest, "training_state.pkl"), "rb") as file:
         return pickle.load(file)
@@ -150,20 +126,19 @@ def check_checkpoint():
     try:
         state = _load_checkpoint_state()
         config = state["config"]
-        model = IrisClassifier(config["input_dim"], 32, config["num_classes"])
+        model = BikeDemandRegressor(config["input_dim"], config["hidden_dim"])
         model.load_state_dict(state["model_state_dict"])
         optimizer = torch.optim.Adam(model.parameters(), lr=float(config["learning_rate"]))
         optimizer.load_state_dict(state["optimizer_state_dict"])
-        return isinstance(state["epoch"], int) and state["epoch"] == config["epochs"]
+        return state["epoch"] == config["epochs"]
     except Exception:
         return False
 
 
 def check_model():
-    path = os.path.join(PROJECT_ROOT, "ray_train_outputs", "ray_train_model_worker_0.pth")
     try:
-        state = torch.load(path, map_location="cpu", weights_only=True)
-        model = IrisClassifier()
+        state = torch.load(os.path.join(PROJECT_ROOT, "ray_train_outputs", "ray_train_model_worker_0.pth"), map_location="cpu", weights_only=True)
+        model = BikeDemandRegressor()
         model.load_state_dict(state)
         return True
     except Exception:
@@ -177,7 +152,7 @@ def check_evaluation():
         return False
     with open(path, encoding="utf-8") as file:
         metrics = json.load(file)
-    return metrics.get("test_records") == 30 and 0 <= metrics.get("test_accuracy", -1) <= 1 and metrics.get("checkpoint_epoch") == 40
+    return metrics.get("test_records") == 110 and metrics.get("checkpoint_epoch") == 40 and all(key in metrics for key in ("test_mae", "test_rmse", "test_r2"))
 
 
 def check_git():
@@ -191,25 +166,22 @@ def check_git_history():
 
 
 def check_dvc():
-    return all(
-        check_file(path)
-        for path in (".dvc", ".dvc/config", ".dvcignore", "data/iris.db.dvc")
-    )
+    return all(check_file(path) for path in (".dvc", ".dvc/config", ".dvcignore", "data/bike_sharing.db.dvc"))
 
 
 def main():
     print("PROJECT VERIFICATION")
-    print("=" * 76)
+    print("=" * 82)
     pass_fail("Python", check_python())
     pass_fail("Ray", check_ray())
-    pass_fail("PyTorch", check_pytorch())
     pass_fail("Ray Train API", check_ray_train_api())
-    pass_fail("CUDA", check_cuda())
+    pass_fail("PyTorch", bool(torch.__version__))
+    pass_fail("CUDA", torch.cuda.is_available())
     pass_fail("Ray GPU resources", check_ray_gpu_resources())
     pass_fail("Configuration", check_configuration())
-    pass_fail("Database schema/data", check_database())
+    pass_fail("Bike database/schema", check_database())
     pass_fail("Database evidence", check_database_evidence())
-    pass_fail("Preprocessing splits", check_preprocessing())
+    pass_fail("Preprocessing/splits", check_preprocessing())
     pass_fail("Training metrics", check_metrics())
     pass_fail("Loss graph", check_graph())
     pass_fail("Model artifact", check_model())
@@ -219,7 +191,7 @@ def main():
     pass_fail("Git history", check_git_history())
     pass_fail("DVC database metadata", check_dvc())
     pass_fail("Documentation", check_file("README.md") and os.path.isdir(os.path.join(PROJECT_ROOT, "docs")))
-    print("=" * 76)
+    print("=" * 82)
 
 
 if __name__ == "__main__":

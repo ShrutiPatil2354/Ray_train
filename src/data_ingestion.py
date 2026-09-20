@@ -1,43 +1,66 @@
 import os
 import sqlite3
+import urllib.request
+import zipfile
 from typing import Any, Dict, Tuple
 
 import numpy as np
-from sklearn.datasets import load_iris
+import pandas as pd
 
 
-TABLE_NAME = "iris_dataset"
-FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+UCI_URL = "https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip"
+TABLE_NAME = "bike_rentals"
+TARGET_COLUMN = "cnt"
+LEAKAGE_COLUMNS = {"casual", "registered", TARGET_COLUMN}
+FEATURE_COLUMNS = [
+    "season",
+    "yr",
+    "mnth",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit",
+    "temp",
+    "atemp",
+    "hum",
+    "windspeed",
+]
+RAW_DIR = os.path.join("data", "raw")
+RAW_ZIP = os.path.join(RAW_DIR, "bike_sharing_dataset.zip")
+RAW_CSV = os.path.join(RAW_DIR, "day.csv")
+
+
+def download_raw_dataset() -> str:
+    os.makedirs(RAW_DIR, exist_ok=True)
+    if not os.path.exists(RAW_CSV):
+        if not os.path.exists(RAW_ZIP):
+            urllib.request.urlretrieve(UCI_URL, RAW_ZIP)
+        with zipfile.ZipFile(RAW_ZIP) as archive:
+            archive.extract("day.csv", RAW_DIR)
+    return os.path.abspath(RAW_CSV)
+
+
+def _validate_raw_frame(frame: pd.DataFrame) -> None:
+    required = {"instant", "dteday", *FEATURE_COLUMNS, "casual", "registered", TARGET_COLUMN}
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(f"Raw bike dataset is missing columns: {sorted(missing)}")
+    if frame.empty or frame[TARGET_COLUMN].isna().any() or (frame[TARGET_COLUMN] < 0).any():
+        raise ValueError("Bike dataset has an invalid target column")
+    if frame["dteday"].duplicated().any():
+        raise ValueError("Bike dataset contains duplicate dates")
 
 
 def create_database(db_path: str) -> Dict[str, Any]:
-    """Load the public Iris dataset into a reproducible local SQLite database."""
+    """Download the public UCI day-level data and ingest it into SQLite."""
+    raw_path = download_raw_dataset()
+    frame = pd.read_csv(raw_path)
+    _validate_raw_frame(frame)
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-    dataset = load_iris()
     connection = sqlite3.connect(db_path)
     try:
-        connection.execute(f"DROP TABLE IF EXISTS {TABLE_NAME}")
-        connection.execute(
-            f"""
-            CREATE TABLE {TABLE_NAME} (
-                id INTEGER PRIMARY KEY,
-                sepal_length REAL NOT NULL,
-                sepal_width REAL NOT NULL,
-                petal_length REAL NOT NULL,
-                petal_width REAL NOT NULL,
-                target INTEGER NOT NULL,
-                target_name TEXT NOT NULL
-            )
-            """
-        )
-        rows = [
-            (*[float(value) for value in features], int(target), dataset.target_names[int(target)])
-            for features, target in zip(dataset.data, dataset.target)
-        ]
-        connection.executemany(
-            f"INSERT INTO {TABLE_NAME} (sepal_length, sepal_width, petal_length, petal_width, target, target_name) VALUES (?, ?, ?, ?, ?, ?)",
-            rows,
-        )
+        frame.to_sql(TABLE_NAME, connection, if_exists="replace", index=False)
+        connection.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{TABLE_NAME}_instant ON {TABLE_NAME}(instant)")
         connection.commit()
     finally:
         connection.close()
@@ -45,57 +68,52 @@ def create_database(db_path: str) -> Dict[str, Any]:
 
 
 def validate_database(db_path: str) -> Dict[str, Any]:
-    """Validate schema, row count, nulls, duplicates, and a real SQL sample query."""
     connection = sqlite3.connect(db_path)
     try:
         table_exists = connection.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
-            (TABLE_NAME,),
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", (TABLE_NAME,)
         ).fetchone()[0] == 1
         if not table_exists:
             raise ValueError(f"Required table does not exist: {TABLE_NAME}")
         columns = [row[1] for row in connection.execute(f"PRAGMA table_info({TABLE_NAME})").fetchall()]
-        expected_columns = ["id", *FEATURE_COLUMNS, "target", "target_name"]
-        if columns != expected_columns:
-            raise ValueError(f"Unexpected database schema: {columns}")
         row_count = connection.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}").fetchone()[0]
-        null_count = connection.execute(
-            f"SELECT COUNT(*) FROM {TABLE_NAME} WHERE sepal_length IS NULL OR sepal_width IS NULL OR petal_length IS NULL OR petal_width IS NULL OR target IS NULL OR target_name IS NULL"
-        ).fetchone()[0]
+        null_count = connection.execute(f"SELECT COUNT(*) FROM {TABLE_NAME} WHERE {TARGET_COLUMN} IS NULL").fetchone()[0]
         duplicate_count = connection.execute(
-            f"SELECT COUNT(*) FROM (SELECT sepal_length, sepal_width, petal_length, petal_width, target FROM {TABLE_NAME} GROUP BY sepal_length, sepal_width, petal_length, petal_width, target HAVING COUNT(*) > 1)"
+            f"SELECT COUNT(*) - COUNT(DISTINCT instant) FROM {TABLE_NAME}"
         ).fetchone()[0]
-        sample_query = f"SELECT {', '.join(FEATURE_COLUMNS)}, target FROM {TABLE_NAME} ORDER BY id LIMIT 5"
+        sample_query = f"SELECT dteday, {', '.join(FEATURE_COLUMNS[:3])}, {TARGET_COLUMN} FROM {TABLE_NAME} ORDER BY instant LIMIT 5"
         sample_rows = connection.execute(sample_query).fetchall()
+        min_date, max_date = connection.execute(f"SELECT MIN(dteday), MAX(dteday) FROM {TABLE_NAME}").fetchone()
     finally:
         connection.close()
-    if row_count == 0 or null_count > 0:
-        raise ValueError(f"Invalid database contents: rows={row_count}, nulls={null_count}")
+    expected = {"instant", "dteday", *FEATURE_COLUMNS, "casual", "registered", TARGET_COLUMN}
+    if not expected.issubset(columns) or row_count == 0 or null_count or duplicate_count:
+        raise ValueError("Bike database validation failed")
     return {
         "database_path": os.path.abspath(db_path),
         "table": TABLE_NAME,
         "rows": row_count,
         "columns": columns,
-        "null_values": null_count,
-        "duplicate_groups": duplicate_count,
+        "target": TARGET_COLUMN,
+        "excluded_leakage_columns": sorted(LEAKAGE_COLUMNS - {TARGET_COLUMN}),
+        "null_target_values": null_count,
+        "duplicate_instant_values": duplicate_count,
+        "date_range": [min_date, max_date],
         "sample_query": sample_query,
         "sample_rows": [list(row) for row in sample_rows],
-        "source": "scikit-learn load_iris dataset, originally Fisher (1936)",
+        "source": UCI_URL,
     }
 
 
 def load_dataset_from_database(db_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
-    """Extract features and targets using SQL; training does not read a CSV."""
+    """Read the non-leaking feature set and target from SQLite using SQL."""
     metadata = validate_database(db_path)
     connection = sqlite3.connect(db_path)
     try:
-        rows = connection.execute(
-            f"SELECT {', '.join(FEATURE_COLUMNS)}, target, target_name FROM {TABLE_NAME} ORDER BY id"
-        ).fetchall()
+        query = f"SELECT dteday, {', '.join(FEATURE_COLUMNS)}, {TARGET_COLUMN} FROM {TABLE_NAME} ORDER BY instant"
+        frame = pd.read_sql_query(query, connection)
     finally:
         connection.close()
-    feature_count = len(FEATURE_COLUMNS)
-    features = np.asarray([row[:feature_count] for row in rows], dtype=np.float32)
-    targets = np.asarray([row[feature_count] for row in rows], dtype=np.int64)
-    target_names = np.asarray([row[-1] for row in rows])
-    return features, targets, target_names, metadata
+    dates = frame.pop("dteday").to_numpy()
+    targets = frame.pop(TARGET_COLUMN).to_numpy(dtype=np.float32)
+    return frame.to_numpy(dtype=np.float32), targets, dates, metadata

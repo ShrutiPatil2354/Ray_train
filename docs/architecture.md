@@ -1,49 +1,57 @@
 # Architecture
 
-## Actual implemented and executed architecture
+## Actual implemented architecture
 
 ```text
-Public Iris dataset
+UCI Bike Sharing Dataset
         |
         v
-SQLite database: data/iris.db
+Raw day.csv acquisition and validation
         |
         v
-SQL extraction and validation
+SQLite data/bike_sharing.db
         |
         v
-StandardScaler fitted on training split
+SQL query from bike_rentals
         |
         v
-Train / validation / test split
+Validation and leakage-column removal
+        |
+        v
+Chronological train / validation / test split
+        |
+        v
+StandardScaler fitted on training data only
         |
         v
 Ray TorchTrainer
         |
         v
-Ray Worker 0 -> PyTorch IrisClassifier -> RTX 5060 GPU
+Ray Worker 0 -> PyTorch BikeDemandRegressor -> RTX 5060 GPU
         |
         v
 Ray metrics and Checkpoint.from_directory
         |
         v
-Evaluation metrics, predictions, model, and artifacts
+Loaded checkpoint -> test MAE/RMSE/R2 -> predictions/model artifacts
 ```
+
+The model excludes `casual` and `registered` because `cnt = casual + registered` and using them would leak the target.
 
 ## Scalable architecture: NOT EXECUTED on current single-GPU hardware
 
 ```text
-TorchTrainer
-        |
-        v
+Ray Train
+    |
+    v
 Ray cluster
-        |
-        +--> Worker 0 -> GPU 0
-        +--> Worker 1 -> GPU 1
-        +--> Worker 2 -> GPU 2
-        |
-        v
+    |
+    +--> Worker 0 -> GPU 0
+    +--> Worker 1 -> GPU 1
+    +--> Worker 2 -> GPU 2
+    |
+    v
 Distributed data-parallel training
 ```
 
-Ray supports this larger configuration, but this project executed one worker and one physical GPU only.
+Ray supports this larger configuration, but the actual experiment used one worker and one physical GPU only.
