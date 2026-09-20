@@ -85,4 +85,5 @@ Each epoch writes model state, optimizer state, epoch, and configuration to a di
 - [docs/architecture.md](docs/architecture.md)
 - [docs/execution.md](docs/execution.md)
 - [docs/limitations.md](docs/limitations.md)
+- [docs/final_verification.md](docs/final_verification.md)
 - [docs/CCA1_REPORT_CONTENT.md](docs/CCA1_REPORT_CONTENT.md)

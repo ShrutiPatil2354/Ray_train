@@ -58,7 +58,7 @@ Advantages include a real public dataset, SQL-backed training input, chronologic
 | 12 | `python -m dvc status` | DVC metadata state | DVC |
 
 ## 10. Documentation
-Technical documentation is in `README.md`, `docs/architecture.md`, `docs/execution.md`, and `docs/limitations.md`.
+Technical documentation is in `README.md`, `docs/architecture.md`, `docs/execution.md`, `docs/limitations.md`, and `docs/final_verification.md`.
 
 ## 11. Real-world Use Cases
 Ray Train can scale tabular demand forecasting to larger datasets and worker groups. This project executed only the single-worker, single-GPU configuration available on the development machine.

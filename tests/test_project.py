@@ -32,6 +32,8 @@ def test_preprocessing_is_chronological_and_leakage_safe(tmp_path):
     assert dataset["split_sizes"] == {"train": 511, "validation": 110, "test": 110}
     assert dataset["split_dates"]["train_end"] < dataset["split_dates"]["validation_end"] < dataset["split_dates"]["test_end"]
     assert dataset["train_x"].shape == (511, 11)
+    assert "casual" not in FEATURE_COLUMNS
+    assert "registered" not in FEATURE_COLUMNS
     assert os.path.exists(output_dir / "preprocessor.pkl")
 
 

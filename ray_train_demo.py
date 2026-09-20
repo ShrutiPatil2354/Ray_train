@@ -37,7 +37,7 @@ def save_graph_from_csv(metrics_path: str, output_dir: str):
     plt.plot(metrics_df["epoch"], metrics_df["train_loss"], marker="o", label="Train loss")
     plt.plot(metrics_df["epoch"], metrics_df["val_loss"], marker="x", label="Validation loss")
     plt.xlabel("Epoch")
-    plt.ylabel("Cross-entropy loss")
+    plt.ylabel("Mean squared error loss")
     plt.title("Ray Train - Bike Demand Training and Validation Loss")
     plt.legend()
     plt.grid(True)
