@@ -8,3 +8,4 @@ backend: gloo
 dataset_size: 2000
 num_features: 10
 output_dir: ray_train_outputs
+dataset_path: data/synthetic_regression_data.csv

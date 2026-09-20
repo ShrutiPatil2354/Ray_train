@@ -1,10 +1,12 @@
 import os
+import sys
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import ray
 import torch
 
+from src.model import save_synthetic_dataset_csv
 from src.training import build_training_plan, create_trainer
 
 
@@ -12,7 +14,7 @@ def print_environment_summary():
     print("=" * 70)
     print("ENVIRONMENT VERIFICATION")
     print("=" * 70)
-    print(f"Python: {torch.__version__}")
+    print(f"Python: {sys.version.split()[0]}")
     print(f"PyTorch: {torch.__version__}")
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
@@ -45,6 +47,13 @@ def main():
     config = build_training_plan()
     output_dir = config["output_dir"]
     os.makedirs(output_dir, exist_ok=True)
+    dataset_path = os.path.abspath(config["dataset_path"])
+    save_synthetic_dataset_csv(
+        dataset_path,
+        num_samples=int(config["dataset_size"]),
+        num_features=int(config["num_features"]),
+        seed=int(config["seed"]),
+    )
 
     print_environment_summary()
 
@@ -53,6 +62,10 @@ def main():
     print("=" * 70)
 
     ray.init(ignore_reinit_error=True)
+    print(f"Ray GPU resources: {ray.available_resources().get('GPU', 0)}")
+    print(f"Requested Ray workers: {config['num_workers']}")
+    print(f"Requested GPU per worker: {1 if config['use_gpu'] else 0}")
+    print(f"Torch backend: {config['backend']}")
     trainer = create_trainer(config)
     trainer.fit()
 

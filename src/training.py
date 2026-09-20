@@ -8,6 +8,7 @@ from ray import train
 from ray.train import Checkpoint, ScalingConfig
 from ray.train.torch import TorchConfig, TorchTrainer
 from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 
 from .model import SimpleRegressionNet, generate_synthetic_dataset
 
@@ -23,6 +24,7 @@ DEFAULT_CONFIG = {
     "dataset_size": 2000,
     "num_features": 10,
     "output_dir": "ray_train_outputs",
+    "dataset_path": "data/synthetic_regression_data.csv",
 }
 
 
@@ -101,24 +103,36 @@ def train_loop_per_worker(config: Dict[str, Any]):
         num_features=int(config.get("num_features", 10)),
         seed=int(config.get("seed", 42)),
     )
-    x = x.to(device)
-    y = y.to(device)
-
     model = SimpleRegressionNet(input_dim=int(config.get("num_features", 10)), hidden_dim=32).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=float(config.get("learning_rate", 0.001)))
     loss_fn = nn.MSELoss()
+    dataset = TensorDataset(x, y)
+    data_loader = DataLoader(
+        dataset,
+        batch_size=int(config.get("batch_size", 64)),
+        shuffle=True,
+        generator=torch.Generator().manual_seed(int(config.get("seed", 42))),
+    )
 
     for epoch in range(1, int(config.get("epochs", 30)) + 1):
-        optimizer.zero_grad()
-        predictions = model(x).squeeze()
-        loss = loss_fn(predictions, y)
-        loss.backward()
-        optimizer.step()
+        epoch_loss = 0.0
+        sample_count = 0
+        for batch_x, batch_y in data_loader:
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+            optimizer.zero_grad()
+            predictions = model(batch_x).squeeze()
+            loss = loss_fn(predictions, batch_y)
+            loss.backward()
+            optimizer.step()
+            batch_size = batch_y.shape[0]
+            epoch_loss += float(loss.item()) * batch_size
+            sample_count += batch_size
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
 
-        loss_value = float(loss.item())
+        loss_value = epoch_loss / sample_count
         checkpoint = _create_directory_checkpoint(model, optimizer, epoch, config, output_dir)
         train.report(
             {

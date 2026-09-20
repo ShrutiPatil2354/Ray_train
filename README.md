@@ -47,7 +47,8 @@ ray_train_cca1/
 │   └── train_config.yaml
 ├── data/
 │   ├── README.md
-│   └── synthetic_regression_data.csv
+│   ├── synthetic_regression_data.csv
+│   └── synthetic_regression_data.csv.dvc
 ├── docs/
 │   ├── architecture.md
 │   ├── execution.md
@@ -88,6 +89,7 @@ backend: gloo
 dataset_size: 2000
 num_features: 10
 output_dir: ray_train_outputs
+dataset_path: data/synthetic_regression_data.csv
 ```
 
 The project uses `TorchConfig(backend="gloo")` because this is a Windows environment and NCCL is not the default cross-platform backend for PyTorch+Ray on Windows.
@@ -116,9 +118,10 @@ The project was executed successfully on the available hardware with:
 - backend: gloo
 
 Observed regression loss:
-- Initial loss: 13.844763
-- Final loss: 12.690871
-- Absolute reduction: 1.153892
+- Epochs: 30
+- Initial loss: 13.398599
+- Final loss: 0.035534
+- Absolute reduction: 13.363065
 
 This is a real model training result, not a fabricated value.
 
@@ -150,7 +153,7 @@ git log
 Git is used for versioning code, configuration, and documentation. This project does not claim multi-developer collaboration because that did not occur in this environment.
 
 ## 16. DVC usage
-DVC repository configuration was initialized when available. This project does not claim a completed remote data-versioning workflow unless the local dataset tracking file and DVC status are present.
+DVC is initialized locally and tracks `data/synthetic_regression_data.csv` through `data/synthetic_regression_data.csv.dvc`. `python -m dvc status` reports that data and pipelines are up to date. No DVC remote storage is configured or claimed.
 
 Commands used:
 ```powershell
@@ -187,9 +190,9 @@ The assignment requires a lifecycle view. This project implements the core phase
 ## 21. Tools table
 | MLOps Stage | Tool 1 | Tool 2 | Purpose | Implemented |
 | --- | --- | --- | --- | --- |
-| Version Control | Git | DVC | Code/data versioning | Yes |
+| Version Control | Git | DVC | Code/data versioning | Git implemented; local DVC tracking implemented |
 | Lightweight metric logging | Ray metrics | CSV export | Track loss over epochs | Yes |
-| Model Development | Ray Train | PyTorch | Distributed/parallel training | Yes |
+| Model Development | Ray Train | PyTorch | Single-worker GPU training; distributed scaling supported by framework | Implemented actual path; scaling theoretical |
 | CI/CD | GitHub Actions | Jenkins | Automated validation | Future |
 | Model Serving | FastAPI | KServe | Inference endpoint deployment | Future |
 | Monitoring | Prometheus | Grafana | Runtime observability | Future |
@@ -202,6 +205,7 @@ The project claims only what was actually executed:
 - CSV metrics produced by the executed training loop
 - loss graph generated from the recorded CSV data
 - Ray checkpoint directories stored and their serialized payload validated
-- Git initialized; DVC configuration initialized when available
+- Git history contains the project commit
+- DVC tracks the generated dataset locally; no remote storage is claimed
 
 The project does not claim multi-GPU parallelization, production deployment, or multi-node cluster execution.

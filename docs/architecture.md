@@ -13,15 +13,17 @@ PyTorch neural network
         ↓
 NVIDIA RTX 5060 Laptop GPU
         ↓
-Metrics + checkpoint recording
+Ray `train.report` metrics
         ↓
-`ray_train_outputs` artifacts
+Ray `Checkpoint.from_directory`
+        ↓
+CSV, graph, model, and checkpoint artifacts
 
 ## Important note
 This is an executed architecture for a single-worker, single-GPU laptop setup. It is not a multi-node cluster architecture.
 
-## Scalable architecture — not executed on the current machine
-The tool is designed to support more advanced configurations such as:
+## Scalable configuration — NOT EXECUTED on the current hardware
+Ray Train supports a scalable configuration such as:
 
 User configuration
         ↓
@@ -29,7 +31,7 @@ Ray cluster scheduler
         ↓
 Multiple Ray workers
         ↓
-Distributed data sharding
+Distributed data-parallel workers
         ↓
 PyTorch model replicas
         ↓
@@ -37,7 +39,7 @@ Multiple GPUs or nodes
         ↓
 Aggregated metrics and checkpointing
 
-This scalable path is supported by the framework design but was not experimentally demonstrated in the current environment because only one physical GPU was available.
+This configuration is supported by the framework, but was not experimentally demonstrated because only one physical GPU was available.
 
 ## Components in this project
 - Ray scheduler: active during training
